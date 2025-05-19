@@ -1,6 +1,23 @@
+"""
+Fisheye to Perspective Projection
+
+This script converts a fisheye image to a perspective projection with configurable parameters.
+It maintains a 'target_mp' megapixel (defaults to 0.48 MP)  output resolution while ensuring the width/height ratio
+matches the horizontal/vertical field of view ratio. Controls are separated into a dedicated window.
+
+Features:
+- Adjustable longitude (0-360°) and latitude (0-90°)
+- Independent horizontal and vertical FOV controls
+- Automatic dimension calculation of the view port based on FOV ratio and target_mp
+- Constant target_mp MP output resolution
+- Performance tracking with interpolation remapping latency measurement
+"""
+
 import cv2
 import numpy as np
 from time import time
+import math
+
 
 def compute_viewing_basis(longitude, latitude):
     """
@@ -38,24 +55,66 @@ def compute_viewing_basis(longitude, latitude):
     return np.column_stack((-R, U, view_vector))  # -R avoids projection mirroring
 
 
-def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_deg, output_size):
+def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48):
     """
-    Project perspective view from a top-view fisheye.
+    Calculate output dimensions based on FOV and target megapixels.
+
+    :param fov_h_deg: Horizontal field of view in degrees
+    :param fov_v_deg: Vertical field of view in degrees
+    :param target_mp: Target megapixels (default 0.48)
+    :return: Tuple of (width, height) in pixels
     """
-    H_out, W_out = output_size[1], output_size[0]
+    # Calculate the aspect ratio based on FOV
+    aspect_ratio = fov_h_deg / fov_v_deg
+
+    # Calculate dimensions that maintain the aspect ratio and hit the target megapixels
+    # Solving: width * height = target_mp * 1,000,000 and width = aspect_ratio * height
+    height = int(math.sqrt((target_mp * 1_000_000) / aspect_ratio))
+    width = int(height * aspect_ratio)
+
+    # Ensure we're as close as possible to the target MP
+    actual_mp = (width * height) / 1_000_000
+    if abs(actual_mp - target_mp) > 0.01:  # More than 0.01 MP off
+        # Adjust to get closer to target MP
+        scale_factor = math.sqrt(target_mp / actual_mp)
+        width = int(width * scale_factor)
+        height = int(height * scale_factor)
+
+    return (width, height)
+
+def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg):
+    """
+    Project a perspective view from a top-view fisheye image.
+
+    :param fisheye_img: Input fisheye image (numpy array)
+    :param cx: X-coordinate of the fisheye center in the input image
+    :param cy: Y-coordinate of the fisheye center in the input image
+    :param r: Radius of the fisheye circle in pixels
+    :param longitude: Horizontal viewing angle in degrees (0-360°)
+    :param latitude: Vertical viewing angle in degrees (0-90°, where 0=nadir, 90=horizon)
+    :param fov_h_deg: Horizontal field of view in degrees
+    :param fov_v_deg: Vertical field of view in degrees
+    :return: Perspective projection image with dimensions calculated from FOV ratio and 0.48MP target
+    """
+    # Calculate output dimensions based on FOV ratio
+    output_size = calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48)
+    W_out, H_out = output_size
+
     rot_matrix = compute_viewing_basis(longitude, latitude)
 
     # Generate output pixel grid
     u, v = np.meshgrid(np.arange(W_out), np.arange(H_out))
 
-    # Focal length from horizontal FOV
-    fov_rad = np.radians(fov_deg)
-    f = (W_out / 2) / np.tan(fov_rad / 2)
+    # Focal lengths from FOV
+    fov_h_rad = np.radians(fov_h_deg)
+    fov_v_rad = np.radians(fov_v_deg)
+    fx = (W_out / 2) / np.tan(fov_h_rad / 2)
+    fy = (H_out / 2) / np.tan(fov_v_rad / 2)
 
     # Camera local coordinates
     cx_out, cy_out = W_out / 2, H_out / 2
-    x_local = (u - cx_out) / f
-    y_local = (cy_out - v) / f  # OpenCV's Y increases downward
+    x_local = (u - cx_out) / fx
+    y_local = (cy_out - v) / fy  # OpenCV's Y increases downward
     z_local = np.ones_like(x_local)
 
     # Normalize direction vectors
@@ -81,51 +140,78 @@ def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_deg,
     st = time()
     viewport = cv2.remap(fisheye_img, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     latency = round((time() - st) * 1000, 3)
-    print(f"remapping latency : {latency} ms")
+    print(
+        f"Remapping latency: {latency} ms | Output size: {output_size[0]}x{output_size[1]} "
+        f"({output_size[0] * output_size[1] / 1_000_000:.2f} MP)")
     return viewport
 
 
-# Trackbar setup
-def nothing(x): pass
+def main():
+    # Load fisheye image
+    imgs_path = "imgs/fisheye.png"
+    fisheye_img = cv2.imread(imgs_path)
+    if fisheye_img is None:
+        print(f"Error: Could not load image at {imgs_path}")
+        return
 
-imgs_path = "imgs/fisheye.png"
-fisheye_img = cv2.imread(imgs_path)
-cx, cy = fisheye_img.shape[1] // 2, fisheye_img.shape[0] // 2
-r = min(cx, cy)
-output_size = (800, 600)
+    cx, cy = fisheye_img.shape[1] // 2, fisheye_img.shape[0] // 2
+    r = min(cx, cy)
 
-cv2.namedWindow('Perspective Output')
-cv2.createTrackbar('Longitude', 'Perspective Output', 0, 360, nothing)  # 0-360°
-cv2.createTrackbar('Latitude', 'Perspective Output', 45, 90, nothing)  # 0-90° (nadir to horizon)
-cv2.createTrackbar('FOV', 'Perspective Output', 90, 180, nothing)  # 1-180°
+    # Create separate windows for controls and output
+    cv2.namedWindow('Controls', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Controls', 600, 200)
+    cv2.namedWindow('Perspective Output', cv2.WINDOW_NORMAL)
 
-prev_lon = None
-prev_lat = None
-prev_fov = None
+    # Trackbar callback
+    def nothing(x):
+        pass
 
-# Initial render
-lon = cv2.getTrackbarPos('Longitude', 'Perspective Output')
-lat = cv2.getTrackbarPos('Latitude', 'Perspective Output')
-fov = cv2.getTrackbarPos('FOV', 'Perspective Output')
-output = fisheye_to_perspective(fisheye_img, cx, cy, r, lon, lat, fov, output_size)
-cv2.imshow('Perspective Output', output)
+    # Create trackbars in the control window
+    cv2.createTrackbar('Longitude', 'Controls', 0, 360, nothing)  # 0-360°
+    cv2.createTrackbar('Latitude', 'Controls', 45, 90, nothing)  # 0-90° (nadir to horizon)
+    cv2.createTrackbar('FOV Horizontal', 'Controls', 90, 180, nothing)  # 1-180°
+    cv2.createTrackbar('FOV Vertical', 'Controls', 60, 180, nothing)  # 1-180°
 
-while True:
-    current_lon = cv2.getTrackbarPos('Longitude', 'Perspective Output')
-    current_lat = cv2.getTrackbarPos('Latitude', 'Perspective Output')
-    current_fov = cv2.getTrackbarPos('FOV', 'Perspective Output')
+    prev_lon = None
+    prev_lat = None
+    prev_fov_h = None
+    prev_fov_v = None
 
-    # Only update if parameters changed
-    if current_lon != prev_lon or current_lat != prev_lat or current_fov != prev_fov:
-        output = fisheye_to_perspective(fisheye_img, cx, cy, r, current_lon, current_lat, current_fov, output_size)
-        cv2.imshow('Perspective Output', output)
+    # Initial render
+    lon = cv2.getTrackbarPos('Longitude', 'Controls')
+    lat = cv2.getTrackbarPos('Latitude', 'Controls')
+    fov_h = max(1, cv2.getTrackbarPos('FOV Horizontal', 'Controls'))
+    fov_v = max(1, cv2.getTrackbarPos('FOV Vertical', 'Controls'))
 
-        # Update previous values
-        prev_lon = current_lon
-        prev_lat = current_lat
-        prev_fov = current_fov
+    output = fisheye_to_perspective(fisheye_img, cx, cy, r, lon, lat, fov_h, fov_v)
+    cv2.imshow('Perspective Output', output)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    # Main loop here
+    while True:
+        current_lon = cv2.getTrackbarPos('Longitude', 'Controls')
+        current_lat = cv2.getTrackbarPos('Latitude', 'Controls')
+        current_fov_h = max(1, cv2.getTrackbarPos('FOV Horizontal', 'Controls'))
+        current_fov_v = max(1, cv2.getTrackbarPos('FOV Vertical', 'Controls'))
 
-cv2.destroyAllWindows()
+        # Only update if parameters changed
+        if (current_lon != prev_lon or current_lat != prev_lat or
+                current_fov_h != prev_fov_h or current_fov_v != prev_fov_v):
+            output = fisheye_to_perspective(
+                fisheye_img, cx, cy, r, current_lon, current_lat, current_fov_h, current_fov_v
+            )
+            cv2.imshow('Perspective Output', output)
+
+            # Update previous values
+            prev_lon = current_lon
+            prev_lat = current_lat
+            prev_fov_h = current_fov_h
+            prev_fov_v = current_fov_v
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
