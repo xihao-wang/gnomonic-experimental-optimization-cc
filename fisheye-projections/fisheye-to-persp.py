@@ -138,6 +138,8 @@ def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_de
     map_x = x_fisheye.astype(np.float32)
     map_y = y_fisheye.astype(np.float32)
     st = time()
+    print(map_x.shape)
+    print(map_y.shape)
     viewport = cv2.remap(fisheye_img, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     latency = round((time() - st) * 1000, 3)
     print(
@@ -167,10 +169,12 @@ def main():
         pass
 
     # Create trackbars in the control window
+    trackbar_Fh = 'FOV Horiz'
+    trackbar_Fv = 'FOV Verti'
     cv2.createTrackbar('Longitude', 'Controls', 0, 360, nothing)  # 0-360°
     cv2.createTrackbar('Latitude', 'Controls', 45, 90, nothing)  # 0-90° (nadir to horizon)
-    cv2.createTrackbar('FOV Horizontal', 'Controls', 90, 180, nothing)  # 1-180°
-    cv2.createTrackbar('FOV Vertical', 'Controls', 60, 180, nothing)  # 1-180°
+    cv2.createTrackbar(trackbar_Fh, 'Controls', 90, 180, nothing)  # 1-180°
+    cv2.createTrackbar(trackbar_Fv, 'Controls', 60, 180, nothing)  # 1-180°
 
     prev_lon = None
     prev_lat = None
@@ -178,10 +182,11 @@ def main():
     prev_fov_v = None
 
     # Initial render
+
     lon = cv2.getTrackbarPos('Longitude', 'Controls')
     lat = cv2.getTrackbarPos('Latitude', 'Controls')
-    fov_h = max(1, cv2.getTrackbarPos('FOV Horizontal', 'Controls'))
-    fov_v = max(1, cv2.getTrackbarPos('FOV Vertical', 'Controls'))
+    fov_h = max(1, cv2.getTrackbarPos(trackbar_Fh, 'Controls'))
+    fov_v = max(1, cv2.getTrackbarPos(trackbar_Fv, 'Controls'))
 
     output = fisheye_to_perspective(fisheye_img, cx, cy, r, lon, lat, fov_h, fov_v)
     cv2.imshow('Perspective Output', output)
@@ -190,8 +195,8 @@ def main():
     while True:
         current_lon = cv2.getTrackbarPos('Longitude', 'Controls')
         current_lat = cv2.getTrackbarPos('Latitude', 'Controls')
-        current_fov_h = max(1, cv2.getTrackbarPos('FOV Horizontal', 'Controls'))
-        current_fov_v = max(1, cv2.getTrackbarPos('FOV Vertical', 'Controls'))
+        current_fov_h = max(1, cv2.getTrackbarPos(trackbar_Fh, 'Controls'))
+        current_fov_v = max(1, cv2.getTrackbarPos(trackbar_Fv, 'Controls'))
 
         # Only update if parameters changed
         if (current_lon != prev_lon or current_lat != prev_lat or
@@ -206,6 +211,8 @@ def main():
             prev_lat = current_lat
             prev_fov_h = current_fov_h
             prev_fov_v = current_fov_v
+            output_h, output_w = output.shape[:2]
+            cv2.resizeWindow('Perspective Output', output_w, output_h)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
