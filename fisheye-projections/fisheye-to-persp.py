@@ -2,7 +2,7 @@
 Fisheye to Perspective Projection
 
 This script converts a fisheye image to a perspective projection with configurable parameters.
-It maintains a 'target_mp' megapixel (defaults to 0.48 MP)  output resolution while ensuring the width/height ratio
+It maintains a 'target_mp' megapixel (defaults to 0.48 MP) output resolution while ensuring the width/height ratio
 matches the horizontal/vertical field of view ratio. Controls are separated into a dedicated window.
 
 Features:
@@ -11,6 +11,7 @@ Features:
 - Automatic dimension calculation of the view port based on FOV ratio and target_mp
 - Constant target_mp MP output resolution
 - Performance tracking with interpolation remapping latency measurement
+- FOV visualization on the original fisheye image
 """
 
 import cv2
@@ -82,6 +83,7 @@ def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48):
 
     return (width, height)
 
+
 def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg):
     """
     Project a perspective view from a top-view fisheye image.
@@ -138,14 +140,134 @@ def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_de
     map_x = x_fisheye.astype(np.float32)
     map_y = y_fisheye.astype(np.float32)
     st = time()
-    print(map_x.shape)
-    print(map_y.shape)
     viewport = cv2.remap(fisheye_img, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     latency = round((time() - st) * 1000, 3)
     print(
-        f"Remapping latency: {latency} ms | Output size: {output_size[0]}x{output_size[1]} "
-        f"({output_size[0] * output_size[1] / 1_000_000:.2f} MP)")
+        f"Remapping latency: {latency} ms | Output size: {output_size[0]}x{output_size[1]} ({output_size[0] * output_size[1] / 1_000_000:.2f} MP)")
     return viewport
+
+
+def draw_fov_on_fisheye(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg):
+    """
+    Draw the field of view projection area on the original fisheye image.
+
+    :param fisheye_img: Original fisheye image
+    :param cx: X-coordinate of fisheye center
+    :param cy: Y-coordinate of fisheye center
+    :param r: Radius of fisheye
+    :param longitude: Horizontal viewing angle in degrees
+    :param latitude: Vertical viewing angle in degrees
+    :param fov_h_deg: Horizontal field of view in degrees
+    :param fov_v_deg: Vertical field of view in degrees
+    :return: Fisheye image with FOV visualization overlay
+    """
+    # Create a copy of the fisheye image to avoid modifying the original
+    viz_img = fisheye_img.copy()
+
+    # Get the rotation matrix
+    rot_matrix = compute_viewing_basis(longitude, latitude)
+
+    # Create boundary points for the FOV rectangle
+    fov_h_rad = np.radians(fov_h_deg)
+    fov_v_rad = np.radians(fov_v_deg)
+
+    # Define the four corners of the FOV in camera space
+    corners = [
+        [-np.tan(fov_h_rad / 2), -np.tan(fov_v_rad / 2), 1.0],  # Top-left
+        [np.tan(fov_h_rad / 2), -np.tan(fov_v_rad / 2), 1.0],  # Top-right
+        [np.tan(fov_h_rad / 2), np.tan(fov_v_rad / 2), 1.0],  # Bottom-right
+        [-np.tan(fov_h_rad / 2), np.tan(fov_v_rad / 2), 1.0]  # Bottom-left
+    ]
+    corners = np.array(corners)
+
+    # Normalize the direction vectors
+    norms = np.sqrt(np.sum(corners ** 2, axis=1))
+    normalized_corners = corners / norms[:, np.newaxis]
+
+    # Rotate vectors to world space
+    world_corners = np.dot(normalized_corners, rot_matrix.T)
+
+    # Convert to spherical coordinates (theta from NADIR)
+    theta = np.arccos(-world_corners[:, 2])
+    phi = np.arctan2(world_corners[:, 1], world_corners[:, 0])
+
+    # Filter corners within fisheye view (less than 90° from nadir)
+    valid_mask = theta <= (np.pi / 2)
+
+    # Map to fisheye image coordinates
+    r_pixel = np.where(valid_mask, (theta / (np.pi / 2)) * r, 0)
+    x_corners = (cx + r_pixel * np.cos(phi)).astype(int)
+    y_corners = (cy + r_pixel * np.sin(phi)).astype(int)
+
+    # Draw boundary with more segments for a smoother outline
+    segments = 20
+    for edge in range(4):
+        start_idx = edge
+        end_idx = (edge + 1) % 4
+
+        if valid_mask[start_idx] and valid_mask[end_idx]:
+            start_corner = normalized_corners[start_idx]
+            end_corner = normalized_corners[end_idx]
+
+            # Create points along this edge
+            edge_points = []
+            for i in range(segments + 1):
+                t = i / segments
+                # Linear interpolation between corners in 3D space
+                pt = (1 - t) * start_corner + t * end_corner
+                # Normalize again
+                pt = pt / np.linalg.norm(pt)
+                edge_points.append(pt)
+
+            edge_points = np.array(edge_points)
+            world_edge = np.dot(edge_points, rot_matrix.T)
+
+            # Convert to spherical coordinates
+            edge_theta = np.arccos(-world_edge[:, 2])
+            edge_phi = np.arctan2(world_edge[:, 1], world_edge[:, 0])
+
+            # Filter valid points and map to fisheye coordinates
+            edge_valid = edge_theta <= (np.pi / 2)
+            edge_r = np.where(edge_valid, (edge_theta / (np.pi / 2)) * r, 0)
+            edge_x = (cx + edge_r * np.cos(edge_phi)).astype(int)
+            edge_y = (cy + edge_r * np.sin(edge_phi)).astype(int)
+
+            # Draw line segments
+            for i in range(len(edge_x) - 1):
+                if edge_valid[i] and edge_valid[i + 1]:
+                    cv2.line(viz_img, (edge_x[i], edge_y[i]),
+                             (edge_x[i + 1], edge_y[i + 1]), (0, 255, 0), 2)
+
+            # Mark the corner with a circle
+            if valid_mask[start_idx]:
+                cv2.circle(viz_img, (x_corners[start_idx], y_corners[start_idx]), 4, (0, 0, 255), -1)
+
+    # Draw a grid inside the FOV for better visualization
+    if all(valid_mask):  # Only if all corners are visible
+        grid_density = 5
+        for i in range(1, grid_density):
+            for j in range(1, grid_density):
+                # Grid point in normalized coordinates
+                grid_x = -np.tan(fov_h_rad / 2) + 2 * (i / grid_density) * np.tan(fov_h_rad / 2)
+                grid_y = -np.tan(fov_v_rad / 2) + 2 * (j / grid_density) * np.tan(fov_v_rad / 2)
+                grid_pt = np.array([grid_x, grid_y, 1.0])
+                grid_pt = grid_pt / np.linalg.norm(grid_pt)
+
+                # Transform to world space
+                world_pt = np.dot(grid_pt, rot_matrix.T)
+
+                # Convert to spherical
+                pt_theta = np.arccos(-world_pt[2])
+                pt_phi = np.arctan2(world_pt[1], world_pt[0])
+
+                # Check if valid and map to fisheye
+                if pt_theta <= (np.pi / 2):
+                    pt_r = (pt_theta / (np.pi / 2)) * r
+                    pt_x = int(cx + pt_r * np.cos(pt_phi))
+                    pt_y = int(cy + pt_r * np.sin(pt_phi))
+                    cv2.circle(viz_img, (pt_x, pt_y), 2, (0, 128, 0), -1)
+
+    return viz_img
 
 
 def main():
@@ -163,6 +285,7 @@ def main():
     cv2.namedWindow('Controls', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('Controls', 600, 200)
     cv2.namedWindow('Perspective Output', cv2.WINDOW_NORMAL)
+    cv2.namedWindow('Fisheye FOV', cv2.WINDOW_NORMAL)
 
     # Trackbar callback
     def nothing(x):
@@ -182,7 +305,6 @@ def main():
     prev_fov_v = None
 
     # Initial render
-
     lon = cv2.getTrackbarPos('Longitude', 'Controls')
     lat = cv2.getTrackbarPos('Latitude', 'Controls')
     fov_h = max(1, cv2.getTrackbarPos(trackbar_Fh, 'Controls'))
@@ -190,9 +312,25 @@ def main():
 
     output = fisheye_to_perspective(fisheye_img, cx, cy, r, lon, lat, fov_h, fov_v)
     cv2.imshow('Perspective Output', output)
+    output_h, output_w = output.shape[:2]
+    cv2.resizeWindow('Perspective Output', output_w, output_h)
+
+    # Draw the FOV on fisheye image
+    fisheye_viz = draw_fov_on_fisheye(fisheye_img, cx, cy, r, lon, lat, fov_h, fov_v)
+    cv2.imshow('Fisheye FOV', fisheye_viz)
 
     # Main loop here
     while True:
+        # Handle keyboard input first with a single waitKey call
+        key = cv2.waitKey(30) & 0xFF
+        if key == ord('q'):
+            break
+        elif key == ord('s'):
+            cv2.imwrite(f"perspective_{output.shape[1]}x{output.shape[0]}.png", output)
+            cv2.imwrite(f"fisheye_viz_{fisheye_viz.shape[1]}x{fisheye_viz.shape[0]}.png", fisheye_viz)
+            print(f"Images saved!")
+
+        # Check if controls have changed
         current_lon = cv2.getTrackbarPos('Longitude', 'Controls')
         current_lat = cv2.getTrackbarPos('Latitude', 'Controls')
         current_fov_h = max(1, cv2.getTrackbarPos(trackbar_Fh, 'Controls'))
@@ -205,17 +343,19 @@ def main():
                 fisheye_img, cx, cy, r, current_lon, current_lat, current_fov_h, current_fov_v
             )
             cv2.imshow('Perspective Output', output)
+            output_h, output_w = output.shape[:2]
+            cv2.resizeWindow('Perspective Output', output_w, output_h)
+
+            # Update the FOV visualization
+            fisheye_viz = draw_fov_on_fisheye(fisheye_img, cx, cy, r, current_lon, current_lat,
+                                              current_fov_h, current_fov_v)
+            cv2.imshow('Fisheye FOV', fisheye_viz)
 
             # Update previous values
             prev_lon = current_lon
             prev_lat = current_lat
             prev_fov_h = current_fov_h
             prev_fov_v = current_fov_v
-            output_h, output_w = output.shape[:2]
-            cv2.resizeWindow('Perspective Output', output_w, output_h)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
 
     cv2.destroyAllWindows()
 
