@@ -1,25 +1,3 @@
-"""
-Multi-Projection Generator for Fisheye Images
-
-This script extends the fisheye-to-persp.py functionality to generate multiple perspective
-projections from a fisheye image with configurable parameters. It creates a grid of projections
-with specified longitude steps and combines them into a composite image suitable for
-object detection models like YOLOv8.
-
-The script generates:
-- Multiple perspective projections at different longitudes
-- A composite image combining all projections in a grid layout
-- Visualization of all projection FOVs on the original fisheye
-- Configuration logs including projection coverage information
-
-Configuration can be set through:
-1. config.py file (default)
-2. Preset configurations in presets.py
-   Usage: python multi-persp.py preset_name
-   Example: python multi-persp.py high_coverage
-3. To list available presets: python multi-persp.py list
-"""
-
 import cv2
 import numpy as np
 from time import time
@@ -85,19 +63,36 @@ def compute_viewing_basis(longitude, latitude):
     return np.column_stack((-R, U, view_vector))  # -R avoids projection mirroring
 
 
-def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48):
+def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48, grid=None, comp_sz=None):
     """
     Calculate output dimensions based on FOV and target megapixels.
 
     :param fov_h_deg: Horizontal field of view in degrees
     :param fov_v_deg: Vertical field of view in degrees
-    :param target_mp: Target megapixels (default 0.48)
+    :param target_mp: Target megapixels (default 0.48) or 'auto' for automatic sizing based on grid and comp_sz
+    :param grid: Grid layout (rows, cols) for auto sizing
+    :param comp_sz: Composite size (width, height) for auto sizing
     :return: Tuple of (width, height) in pixels
     """
     # Calculate the aspect ratio based on FOV
     aspect_ratio = fov_h_deg / fov_v_deg
 
-    # Calculate dimensions that maintain the aspect ratio and hit the target megapixels
+    # Auto mode: calculate based on final composite size and grid layout
+    if target_mp == 'auto' and grid is not None and comp_sz is not None:
+        rows, cols = grid
+        comp_width, comp_height = comp_sz
+
+        # Calculate the maximum width and height of each projection
+        # This is the exact division of the composite size by the grid dimensions
+        width = int(comp_width / cols)
+        height = int(comp_height / rows)
+
+        # No need to adjust dimensions - we want to exactly fill the composite
+        # This ensures that when projections are arranged in the grid and resized,
+        # they will perfectly match the desired composite size
+        return (width, height)
+
+    # Standard mode: calculate based on target megapixels
     # Solving: width * height = target_mp * 1,000,000 and width = aspect_ratio * height
     height = int(math.sqrt((target_mp * 1_000_000) / aspect_ratio))
     width = int(height * aspect_ratio)
@@ -113,7 +108,8 @@ def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48):
     return (width, height)
 
 
-def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg, target_mp=0.48):
+def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg, target_mp=0.48, grid=None,
+                           comp_sz=None):
     """
     Project a perspective view from a top-view fisheye image.
 
@@ -125,11 +121,13 @@ def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_de
     :param latitude: Vertical viewing angle in degrees (0-90°, where 0=nadir, 90=horizon)
     :param fov_h_deg: Horizontal field of view in degrees
     :param fov_v_deg: Vertical field of view in degrees
-    :param target_mp: Target megapixels for output image
-    :return: Perspective projection image with dimensions calculated from FOV ratio and target_mp
+    :param target_mp: Target megapixels for output image or 'auto'
+    :param grid: Grid layout for auto sizing
+    :param comp_sz: Composite size for auto sizing
+    :return: Perspective projection image, latency, and mapping matrices
     """
     # Calculate output dimensions based on FOV ratio
-    output_size = calculate_dimensions(fov_h_deg, fov_v_deg, target_mp)
+    output_size = calculate_dimensions(fov_h_deg, fov_v_deg, target_mp, grid, comp_sz)
     W_out, H_out = output_size
 
     rot_matrix = compute_viewing_basis(longitude, latitude)
@@ -172,7 +170,9 @@ def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_de
     st = time()
     viewport = cv2.remap(fisheye_img, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     latency = round((time() - st) * 1000, 3)
-    return viewport, latency
+
+    # Return the projection, latency, and mapping matrices
+    return viewport, latency, (map_x, map_y)
 
 
 def draw_fov_on_fisheye(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg, color=(0, 255, 0)):
@@ -662,7 +662,7 @@ def load_configuration():
         print(f"Latitude: {preset['latitude']}°, Starting longitude: {preset['lon_0']}°, Step: {preset['lon_step']}°")
         print(f"Target MP: {preset['target_mp']}, Composite size: {preset['comp_sz'][0]}×{preset['comp_sz'][1]}")
         print(f"Output directory: {preset['output_dir']}")
-        print("="*30)
+        print("=" * 30)
         return preset
 
     # If no preset specified or preset not found, use config.py custom configuration
@@ -685,14 +685,17 @@ def load_configuration():
     # Print custom configuration details
     print(f"\n=== Configuration Source ===")
     print(f"Using custom configuration from config.py")
-    print(f"SELECTED_PRESET is {'None or not defined' if not hasattr(config, 'SELECTED_PRESET') else 'set to an invalid preset name' if config.SELECTED_PRESET else 'None'}")
+    print(
+        f"SELECTED_PRESET is {'None or not defined' if not hasattr(config, 'SELECTED_PRESET') else 'set to an invalid preset name' if config.SELECTED_PRESET else 'None'}")
     print(f"Image path: {custom_config['img_path']}")
     print(f"Projections: {custom_config['proj_nbr']} with FOV: {custom_config['fov_h']}°×{custom_config['fov_v']}°")
-    print(f"Latitude: {custom_config['latitude']}°, Starting longitude: {custom_config['lon_0']}°, Step: {custom_config['lon_step']}°")
+    print(
+        f"Latitude: {custom_config['latitude']}°, Starting longitude: {custom_config['lon_0']}°, Step: {custom_config['lon_step']}°")
     print(f"Grid: {custom_config['grid']}")
-    print(f"Target MP: {custom_config['target_mp']}, Composite size: {custom_config['comp_sz'][0]}×{custom_config['comp_sz'][1]}")
+    print(
+        f"Target MP: {custom_config['target_mp']}, Composite size: {custom_config['comp_sz'][0]}×{custom_config['comp_sz'][1]}")
     print(f"Output directory: {custom_config['output_dir']}")
-    print("="*30)
+    print("=" * 30)
 
     return custom_config
 
@@ -777,6 +780,7 @@ def main():
 
     # Generate projections
     projections = []
+    mapping_matrices = []
     total_latency = 0
     fov_colors = generate_rainbow_colors(proj_nbr)
 
@@ -789,16 +793,19 @@ def main():
         longitude = (lon_0 + i * lon_step) % 360
 
         # Generate projection
-        projection, latency = fisheye_to_perspective(
+        projection, latency, mapping = fisheye_to_perspective(
             fisheye_img, cx, cy, r, longitude, latitude,
-            fov_h, fov_v, target_mp
+            fov_h, fov_v, target_mp, grid, comp_sz
         )
         projections.append(projection)
+        mapping_matrices.append(mapping)
         total_latency += latency
 
         # Save projection
         proj_file = os.path.join(out_dir, f"persp-{next_index}-{i}.png")
         cv2.imwrite(proj_file, projection)
+
+        # Store mapping matrices in the list (will save all together later)
 
         # Draw FOV on fisheye image
         fisheye_with_fovs = draw_fov_on_fisheye(
@@ -824,7 +831,21 @@ def main():
     fovs_file = os.path.join(out_dir, f"fovs-fish-{next_index}.png")
     cv2.imwrite(fovs_file, fisheye_with_fovs)
 
-    # Append performance information to log file
+    # Save all mapping matrices in one combined file
+    print("Saving combined mapping matrices...")
+    # Create array with shape [proj_nbr, 2, height, width]
+    combined_maps = np.zeros((proj_nbr, 2,
+                              mapping_matrices[0][0].shape[0],
+                              mapping_matrices[0][0].shape[1]), dtype=np.float32)
+
+    # Fill the array with mapping data
+    for i, (map_x, map_y) in enumerate(mapping_matrices):
+        combined_maps[i, 0] = map_x
+        combined_maps[i, 1] = map_y
+
+    # Save combined mappings
+    map_file = os.path.join(out_dir, f"mappings-{next_index}.npy")
+    np.save(map_file, combined_maps)
     with open(log_file, 'a') as f:
         f.write("Performance Information:\n")
         f.write(f"- Total Remapping Latency: {total_latency:.2f} ms\n")
@@ -835,6 +856,14 @@ def main():
         f.write(f"- Projection Dimensions: {proj_dims[1]}x{proj_dims[0]} pixels\n")
         f.write(f"- Original Composite Dimensions: {composite.shape[1]}x{composite.shape[0]} pixels\n")
         f.write(f"- Resized Composite Dimensions: {comp_sz[0]}x{comp_sz[1]} pixels\n")
+
+        # Mapping matrices information
+        f.write("\nMapping Matrices Information:\n")
+        f.write(f"- All mapping matrices saved to mappings-{next_index}.npy file\n")
+        f.write(
+            f"- Combined array shape: [{proj_nbr}, 2, {mapping_matrices[0][0].shape[0]}, {mapping_matrices[0][0].shape[1]}]\n")
+        f.write(f"- First dimension: Projection index (0-{proj_nbr - 1})\n")
+        f.write(f"- Second dimension: Map type (0=map_x, 1=map_y)\n")
 
     print("\nProcessing complete!")
     print(f"All outputs saved to: {out_dir}")
