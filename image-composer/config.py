@@ -14,7 +14,7 @@ the script.
 # Or use a preset name: "default", "high_coverage", "horizon", "yolo_grid",
 # "wide_angle", "high_res"
 
-SELECTED_PRESET = "nothing"
+SELECTED_PRESET = "yolo_grid"
 
 # Override the preset's image path (set to None to use the preset's default image)
 CUSTOM_IMAGE = None  # Example: "path/to/custom_fisheye.png"
@@ -27,16 +27,16 @@ CUSTOM_IMAGE = None  # Example: "path/to/custom_fisheye.png"
 IMG_PATH = "imgs/fisheye.png"
 
 # Number of projections to generate (must be even or have integer sqrt)
-PROJ_NBR = 10
+PROJ_NBR = 8
 
 # Field of view in degrees
 FOV_H = 48.0  # Horizontal field of view
 FOV_V = 96.0  # Vertical field of view
 
 # Camera positioning
-LATITUDE = 45.0  # 0=nadir (looking straight down), 90=horizon
+LATITUDE = 36.0  # 0=nadir (looking straight down), 90=horizon
 LON_0 = 0.0  # Starting longitude
-LON_STEP = 36.6  # Longitude step between projections
+LON_STEP = 360/PROJ_NBR  # Longitude step between projections
 
 # Grid configuration - set to None for automatic determination
 # Format: (rows, cols) or None

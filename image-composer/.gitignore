@@ -1,0 +1,25 @@
+# Ignore all PyTorch weights
+*.pt
+
+# Ignore all PNG and JPG images in the root directory only
+/*.png
+/*.jpg
+/*.jpeg
+
+# Ignore all .txt files except customization.txt
+*.txt
+# use to make expection for a TXT file: !file_name.txt
+
+# Ignore contents of multi-persp-out but keep the folder
+multi-persp-out/*
+!multi-persp-out/.gitkeep
+
+# Ignore IDE/cache junk
+__pycache__/
+*.pyc
+
+# PyCharm / IntelliJ IDEA
+.idea/
+
+# VSCode (optional, remove if you want to keep it)
+#.vscode/

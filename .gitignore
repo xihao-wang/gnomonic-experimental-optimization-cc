@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Data (too large to version control)
+datasets/data/
+results/
+*.npy
+*.h5
+*.pkl
+*.pickle
+
+# Image files (can be regenerated or too large)
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.gif
+*.tiff
+
+# YOLO models (.pt files anywhere in subdirectories)
+*.pt
+*.pth
+detection-pipeline/models/
+~/.yolov8/
+
+# Logs
+*.log
+project.log
+runs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+temp-copy.py
+
+# Image-composer outputs (can be regenerated)
+image-composer/multi-persp-out/
+image-composer/result_*.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+coding-data/
+planning-data/
+
+# Irrelevant files
+INFRASTRUCTURE_SUMMARY.txt
