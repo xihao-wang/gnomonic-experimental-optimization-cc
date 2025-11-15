@@ -1,75 +1,153 @@
 """
-Configuration for the detection pipeline module.
+YACS configuration for detection pipeline.
 
-This module:
-1. Creates composite images using image-composer API
-2. Runs YOLO detection on the composite image
-3. Backprojects results from composite to fisheye coordinates
+This module defines all configurable parameters for the detection pipeline using YACS.
+Configuration hierarchy:
+  - INPUT: Fisheye image and preprocessing
+  - PROJECTION: Composite image generation settings
+  - YOLO: Detection model and inference parameters
+  - OUTPUT: Visualization and result storage
+
+Usage:
+    from detection_pipeline.config import get_cfg
+    cfg = get_cfg()  # Get default config
+    cfg.freeze()     # Prevent accidental modifications
 """
 
-from pathlib import Path
+from yacs.config import CfgNode as CN
 
 # ============================================================================
-# YOLO DETECTOR SETTINGS
+# Create config object
 # ============================================================================
 
-# YOLO confidence threshold for detections
-YOLO_CONFIDENCE_THRESHOLD = 0.5
-
-# YOLO IoU threshold for NMS
-YOLO_IOU_THRESHOLD = 0.45
-
-# Device to run YOLO on: "cpu", "cuda" (if NVIDIA GPU available)
-YOLO_DEVICE = "cpu"
+_C = CN()
 
 # ============================================================================
-# PROJECTION SETTINGS
+# INPUT: Fisheye Image Configuration
 # ============================================================================
 
-# Default projection configuration (can be overridden per-experiment)
-# These are passed to image-composer's projection generator
+_C.INPUT = CN()
 
-DEFAULT_PROJECTIONS = {
-    "count": 4,  # Number of projections (2x2 grid = 4)
-    "fov_h": 48.0,  # Horizontal field of view
-    "fov_v": 96.0,  # Vertical field of view
-    "latitude": 36.0,  # Camera angle (0=nadir, 90=horizon)
-}
-
-# Composite image size (width, height) for YOLO input
-COMPOSITE_SIZE = (640, 640)
+# Path to fisheye image to process
+_C.INPUT.IMAGE_PATH = "imgs/fisheye.png"
 
 # ============================================================================
-# BACKPROJECTION SETTINGS
+# PROJECTION: Composite Image Configuration
 # ============================================================================
 
-# When projecting detections back to fisheye, we may need to:
-# - Account for projection uncertainty
-# - Merge overlapping detections from different projections
-# - Handle partial detections at projection boundaries
+_C.PROJECTION = CN()
 
-# Merge overlapping detections if IoU > threshold
-MERGE_IoU_THRESHOLD = 0.5
+# Preset to use for projection: "yolo_grid", "default", "high_coverage", "horizon", "wide_angle", "high_res"
+_C.PROJECTION.PRESET = "yolo_grid"
 
-# Mark detections as "partial" if they touch projection boundaries
-# and may not be complete in the fisheye
-MARK_PARTIAL_DETECTIONS = True
+# Override preset's image path (None = use preset's default)
+_C.PROJECTION.CUSTOM_IMAGE = None
+
+# ---- Manual configuration (used when PRESET is None) ----
+
+# Number of projections to generate
+_C.PROJECTION.PROJ_NBR = 9
+
+# Field of view in degrees
+_C.PROJECTION.FOV_H = 60.0  # Horizontal
+_C.PROJECTION.FOV_V = 60.0  # Vertical
+
+# Camera positioning
+_C.PROJECTION.LATITUDE = 45.0  # 0=nadir (straight down), 90=horizon
+_C.PROJECTION.LON_0 = 0.0     # Starting longitude
+_C.PROJECTION.LON_STEP = 40.0 # Longitude step between projections
+
+# Grid layout: (rows, cols) or None for automatic
+_C.PROJECTION.GRID = None
+
+# Composite image size (width, height) - should match YOLO input size
+_C.PROJECTION.COMP_SIZE = (640, 640)
+
+# Target megapixels per projection: 'auto' (recommended) or float value
+# 'auto' means: comp_size / grid_dims (efficient, no resizing needed)
+_C.PROJECTION.TARGET_MP = 'auto'
 
 # ============================================================================
-# OUTPUT & VISUALIZATION
+# YOLO: Detection Model Configuration
 # ============================================================================
 
-# Save intermediate composite images
-SAVE_COMPOSITE_IMAGES = False
+_C.YOLO = CN()
 
-# Save visualization of detections on composite
-SAVE_COMPOSITE_DETECTIONS_VIZ = False
+# YOLO model to use: path to .pt file in detection-pipeline/models/
+# Available: yolov8n.pt, yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt
+#            yolo11n.pt, yolo11s.pt, yolo12n.pt, yolo12s.pt, yolo12x.pt, etc.
+# Use relative path from detection-pipeline directory
+_C.YOLO.MODEL = "models/yolov8n.pt"
 
-# Save visualization of backprojected detections on fisheye
-SAVE_FISHEYE_DETECTIONS_VIZ = False
+# Device to run YOLO on: "cpu" or "cuda" (if GPU available)
+_C.YOLO.DEVICE = "cpu"
+
+# ---- Detection Parameters ----
+
+# Confidence threshold for detections (0-1)
+# Detections below this threshold are discarded
+_C.YOLO.CONFIDENCE_THRESHOLD = 0.5
+
+# IoU threshold for Non-Maximum Suppression (NMS)
+# Controls how aggressively overlapping detections are merged
+_C.YOLO.IOU_THRESHOLD = 0.45
+
+# Maximum number of detections to keep per image
+_C.YOLO.MAX_DETECTIONS = 300
 
 # ============================================================================
-# DEBUGGING
+# OUTPUT: Visualization and Results
 # ============================================================================
 
-VERBOSE = False  # Print detailed pipeline information
+_C.OUTPUT = CN()
+
+# Save intermediate composite image before YOLO
+_C.OUTPUT.SAVE_COMPOSITE = False
+
+# Save visualization of detections on composite image
+_C.OUTPUT.SAVE_COMPOSITE_VIZ = False
+
+# Save visualization of detections on original fisheye image (after backprojection)
+_C.OUTPUT.SAVE_FISHEYE_VIZ = False
+
+# Output directory for visualizations and results
+_C.OUTPUT.SAVE_DIR = "results"
+
+# ============================================================================
+# DEBUG / VERBOSE
+# ============================================================================
+
+_C.VERBOSE = False  # Print detailed pipeline information
+
+
+# ============================================================================
+# Public API Functions
+# ============================================================================
+
+def get_cfg():
+    """
+    Get a copy of the default configuration.
+
+    Returns:
+        yacs.config.CfgNode: Configuration object
+    """
+    return _C.clone()
+
+
+def get_cfg_as_dict(cfg):
+    """
+    Convert YACS config object to dictionary.
+
+    Args:
+        cfg: YACS config object
+
+    Returns:
+        dict: Configuration as dictionary
+    """
+    return CN.to_py(cfg)
+
+
+if __name__ == "__main__":
+    """Print default configuration when run as script."""
+    cfg = get_cfg()
+    print(cfg)

@@ -1,0 +1,15 @@
+feat: Implement detection pipeline for pedestrian detection in fisheye images
+
+Add complete detection pipeline: read fisheye image, convert to composite image
+using multiple gnomonic projections, run YOLO detection, filter to person class.
+
+Changes:
+- image-composer/multi-persp.py: add generate_composite_from_config() function
+- image-composer/__init__.py: expose composite generation API
+- detection-pipeline/config.py: YACS configuration for image path, projection settings, YOLO model selection, and detection hyperparameters (confidence, IoU threshold)
+- detection-pipeline/yolo_detector.py: YOLO detector wrapper with person class filtering
+- detection-pipeline/pipeline.py: pipeline orchestrator (fisheye -> composite -> YOLO detection)
+- detection-pipeline/test_pipeline.py: end-to-end test on fisheye-sample.png
+- detection-pipeline/README.md: usage guide and examples
+
+Test result: detected 3 pedestrians on fisheye-sample.png, output saved to detection-composite-fisheye-sample.png

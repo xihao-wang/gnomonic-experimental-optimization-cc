@@ -87,7 +87,7 @@ PRESETS = {
         "lon_step": 40.0,
         "grid": (3, 3),  # 3x3 grid
         "comp_sz": (640, 640),
-        "target_mp": 0.48
+        "target_mp": 'auto'  # Auto: each projection will be comp_sz / grid_dims (no resizing needed)
     },
     
     # --------------------------------------------------------------------

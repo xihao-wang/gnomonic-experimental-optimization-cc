@@ -35,56 +35,70 @@
 
 ---
 
-## 🚀 Phase 2: Detection Pipeline (CURRENT)
+## 🚀 Phase 2: Detection Pipeline (STEPS 1-3 COMPLETE - TESTING NEXT)
 
 ### Objective
 Implement `detection-pipeline/` module to:
-1. Accept fisheye image + projection config
-2. Use image-composer API to create composite
-3. Run YOLO detection on composite
-4. Backproject detections to fisheye coordinates
-5. Return standardized Detection objects
+1. ✅ Accept fisheye image + projection config
+2. ✅ Use image-composer API to create composite
+3. ✅ Run YOLO detection on composite
+4. ⏳ Backproject detections to fisheye coordinates (Phase 2B)
+5. ✅ Return standardized Detection objects
 
-### API Signatures (from docs/API.md)
+### Completed Steps (2025-11-15)
 
-**DetectionPipeline.run()**:
-```python
-def run(self, fisheye_image: np.ndarray, projection_config: dict) -> List[Detection]
-```
+**Step 2-1: Made image-composer callable** ✅
+- Added `generate_composite_from_config()` function to `image-composer/multi-persp.py`
+  - Takes config dict, returns (composite_image, metadata)
+  - Metadata includes mapping_matrices for future backprojection
+- Updated `image-composer/__init__.py` to expose the API
+- Updated `image-composer/presets.py`: yolo_grid preset uses `target_mp='auto'`
+  - This ensures per-projection size = comp_size / grid_dims (no resizing needed)
 
-**YOLODetector.detect()**:
-```python
-def detect(self, image: np.ndarray) -> List[dict]
-```
+**Step 2-2 & 2-3: Created detection pipeline components** ✅
+- `detection-pipeline/config.py`: YACS configuration with sections:
+  - INPUT: fisheye image path
+  - PROJECTION: preset selection, manual config, FOV settings
+  - YOLO: model selection pointing to `models/yolov8n.pt` (local), device, detection hyperparameters
+  - OUTPUT: visualization and result storage flags
+  - **Updated**: Model path now points to `detection-pipeline/models/` directory
 
-**backproject_detections()**:
-```python
-def backproject_detections(
-    detections_composite: List[dict],
-    composite_metadata: dict,
-    fisheye_shape: tuple
-) -> List[Detection]
-```
+- `detection-pipeline/yolo_detector.py`: YOLODetector class
+  - Version-agnostic (works with any YOLO version)
+  - detect() accepts optional `class_filter` parameter (e.g., "person")
+  - **Updated**: Filters detections to specified class(es)
 
-### Files to Implement
-- `detection-pipeline/pipeline.py` - Main orchestrator
-- `detection-pipeline/yolo_detector.py` - YOLO integration
-- `detection-pipeline/backprojection.py` - Coordinate transformation
-
-### Configuration Parameters
-Location: `detection-pipeline/config.py`
-- YOLO model selection (nano, small, medium, large)
-- Confidence threshold
-- Device (CPU/GPU)
-- Composite image size
-- FOV and camera angle defaults
-- Backprojection merge threshold
+- `detection-pipeline/pipeline.py`: DetectionPipeline orchestrator
+  - run() method: loads config → builds projection config → creates composite → runs YOLO → returns detections + metadata
+  - Supports both preset and manual projection configuration
+  - **Updated**: Passes `class_filter="person"` to detector for pedestrian-only detections
+  - Verbose logging and optional visualization
 
 ### Status
-- [ ] yolo_detector.py
-- [ ] backprojection.py
-- [ ] pipeline.py
-- [ ] Unit tests
+- ✅ config.py (YACS with local model path)
+- ✅ yolo_detector.py (version-agnostic, person class filtering)
+- ✅ pipeline.py (orchestrator with person filtering)
+- ✅ test_pipeline.py (end-to-end test)
+- ✅ Verified output: `detection-composite-fisheye-sample.png`
+- ⏳ backprojection.py (blocked - not needed until Phase 2B)
+
+### Test Results (Final - 2025-11-15)
+**End-to-End Test: SUCCESSFUL** ✅
+
+Test on `fisheye-sample.png` with corrections:
+- ✅ Using local YOLO model from `detection-pipeline/models/yolov8n.pt`
+- ✅ Filtered detections to "person" class only
+- ✅ Generated 3×3 composite (640×640) from 9 projections
+- ✅ Found **3 pedestrians** (filtered from 10 total detections):
+  - Person at (0.868, 0.086), conf=0.730
+  - Person at (0.030, 0.447), conf=0.638
+  - Person at (0.057, 0.749), conf=0.527
+- ✅ Saved output: `detection-composite-fisheye-sample.png`
+
+Output files created:
+- `composite.png` - Raw composite image (640×640)
+- `composite_detections.png` - Person detections visualized on composite
+- `detection-composite-fisheye-sample.png` - Final output with pedestrian bounding boxes
 
 ---
 
@@ -117,10 +131,15 @@ If memory is compacted, read in this order:
 4. detection-pipeline/config.py - current config
 
 ### Current Implementation Status
-**What**: Implementing detection-pipeline module
-**How**: Following API signatures in docs/API.md
-**User Guidance**: Awaiting step-by-step instructions from user
-**Progress Tracking**: Using TodoWrite for session tasks, updating this file at milestones
+**What**: Detection pipeline steps 1-3 COMPLETE + tested end-to-end ✅
+**How**: Following exact requirements from user prompt
+  - Step 2-1: image-composer API callable (generate_composite_from_config)
+  - Step 2-2 & 2-3: YACS config + YOLO detector with person filtering
+  - Step 3: YOLO detection on composite with hyperparameter control
+**Testing**: End-to-end test PASSED
+  - Fisheye image → 3×3 composite → YOLO detection → 3 pedestrians detected
+  - Output: detection-composite-fisheye-sample.png with bounding boxes
+**Next Phase**: Phase 2B - Implement backprojection to fisheye coordinates (not started)
 
 ---
 
@@ -150,10 +169,15 @@ results = model(image)
 
 ---
 
-## 🎯 Ready For
+## 🎯 Ready For Testing
 
 ✅ Infrastructure complete
-✅ Configuration defined
-✅ APIs specified
-🔄 **Awaiting user guidance on implementation approach**
+✅ Configuration defined (YACS)
+✅ APIs implemented (all 3 components)
+✅ Steps 1-3 from user prompt COMPLETE:
+  - 2-1: image-composer callable ✅
+  - 2-2 & 2-3: Detection pipeline with YACS config ✅
+  - Step 3: YOLO detector + config handles ✅
+
+🧪 **Ready to test end-to-end with sample fisheye image**
 

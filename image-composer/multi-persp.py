@@ -700,6 +700,84 @@ def load_configuration():
     return custom_config
 
 
+def generate_composite_from_config(cfg_dict):
+    """
+    Generate composite image from configuration dictionary (programmatic API).
+
+    Args:
+        cfg_dict: Dict with keys img_path, proj_nbr, fov_h, fov_v, latitude, lon_0, lon_step, grid, comp_sz, target_mp
+
+    Returns:
+        (resized_composite, metadata) where metadata includes mapping_matrices for backprojection
+    """
+    img_path = cfg_dict["img_path"]
+    proj_nbr = cfg_dict["proj_nbr"]
+    fov_h = cfg_dict["fov_h"]
+    fov_v = cfg_dict["fov_v"]
+    latitude = cfg_dict["latitude"]
+    lon_0 = cfg_dict["lon_0"]
+    lon_step = cfg_dict["lon_step"]
+    grid = cfg_dict["grid"]
+    comp_sz = cfg_dict["comp_sz"]
+    target_mp = cfg_dict["target_mp"]
+
+    # Validate proj_nbr
+    if not is_valid_proj_nbr(proj_nbr):
+        raise ValueError(f"Invalid number of projections ({proj_nbr}). Must be even or have integer square root.")
+
+    # Determine grid layout
+    grid = determine_grid(proj_nbr, grid)
+
+    # Load fisheye image
+    fisheye_img = cv2.imread(img_path)
+    if fisheye_img is None:
+        raise FileNotFoundError(f"Could not load image at {img_path}")
+
+    # Fisheye parameters
+    cx, cy = fisheye_img.shape[1] // 2, fisheye_img.shape[0] // 2
+    r = min(cx, cy)
+
+    # Generate projections and mapping matrices
+    projections = []
+    mapping_matrices = []
+
+    for i in range(proj_nbr):
+        longitude = (lon_0 + i * lon_step) % 360
+        projection, latency, mapping = fisheye_to_perspective(
+            fisheye_img, cx, cy, r, longitude, latitude,
+            fov_h, fov_v, target_mp, grid, comp_sz
+        )
+        projections.append(projection)
+        mapping_matrices.append(mapping)
+
+    # Create composite image
+    composite, resized_composite = create_composite_image(projections, grid, comp_sz)
+
+    # Create combined mapping matrices array [proj_nbr, 2, height, width]
+    combined_maps = np.zeros((proj_nbr, 2,
+                              mapping_matrices[0][0].shape[0],
+                              mapping_matrices[0][0].shape[1]), dtype=np.float32)
+
+    for i, (map_x, map_y) in enumerate(mapping_matrices):
+        combined_maps[i, 0] = map_x
+        combined_maps[i, 1] = map_y
+
+    # Create metadata
+    metadata = {
+        'proj_nbr': proj_nbr,
+        'grid': grid,
+        'fov_h': fov_h,
+        'fov_v': fov_v,
+        'latitude': latitude,
+        'lon_0': lon_0,
+        'lon_step': lon_step,
+        'comp_sz': comp_sz,
+        'mapping_matrices': combined_maps,
+    }
+
+    return resized_composite, metadata
+
+
 def main():
     # Load configuration
     cfg = load_configuration()
