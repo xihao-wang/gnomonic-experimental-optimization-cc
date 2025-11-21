@@ -1,12 +1,15 @@
-feat: Improve detection pipeline with GPU auto-detect and organized results
+refactor: Rename module directories and files from hyphens to underscores
 
-Auto-detect GPU/CPU device (CUDA if available, else CPU). Organize results in timestamped directories per image. Save single output with metadata.
+Follow Python naming conventions for package/module directories. Replace all hyphenated names with underscores.
 
 Changes:
-- detection-pipeline/config.py: YOLO.DEVICE defaults to None for auto-detection
-- detection-pipeline/yolo_detector.py: auto-detect GPU if available using torch.cuda.is_available()
-- detection-pipeline/pipeline.py: refactor to save organized results in results/{image_name}/{timestamp}/ with 4 files (fisheye image, composite, detections with bboxes, metadata.txt)
-- detection-pipeline/test_pipeline.py: simplify to use organized output, remove redundant saving
-- detection-pipeline/README.md: update documentation for new output structure and GPU auto-detection
+- image-composer/ → image_composer/
+- detection-pipeline/ → detection_pipeline/
+- multi-persp.py → multi_persp.py
+- fisheye-to-persp.py → fisheye_to_persp.py
+- Remove importlib workarounds: use standard Python imports instead
+- Update all import statements in pipeline.py, test_pipeline.py
+- Update documentation references in README.md files
+- Delete temp-copy.py (unused file)
 
-Test result: 3 pedestrians detected on fisheye-sample.png with GPU (CUDA), results saved to timestamped directory with metadata file
+Test: Pipeline runs successfully with standard imports, detects 3 pedestrians on test image

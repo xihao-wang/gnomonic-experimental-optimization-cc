@@ -3,52 +3,32 @@ Detection pipeline orchestrator.
 
 Coordinates the full workflow:
 1. Load fisheye image from config
-2. Create composite image using image-composer
+2. Create composite image using image_composer
 3. Run YOLO detection on composite
 4. Return detections in composite coordinate space
 
-For backprojection to fisheye, use the metadata returned by image-composer.
+For backprojection to fisheye, use the metadata returned by image_composer.
 """
 
 import cv2
 import numpy as np
 from pathlib import Path
 import sys
-import importlib.util
 import shutil
 from datetime import datetime
 
-# Helper function to import modules from directories with hyphens in their names
-def _import_module_from_path(module_name, filepath, add_to_path=None):
-    """Import a module from a file path."""
-    if add_to_path and str(add_to_path) not in sys.path:
-        sys.path.insert(0, str(add_to_path))
-    spec = importlib.util.spec_from_file_location(module_name, filepath)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+# Add parent directory to path to allow imports from image_composer
+_parent_dir = Path(__file__).parent.parent
+if str(_parent_dir) not in sys.path:
+    sys.path.insert(0, str(_parent_dir))
 
-# Import from image-composer (has hyphen in directory name)
-_img_composer_dir = Path(__file__).parent.parent / "image-composer"
-# Add image-composer to path so multi_persp.py can import presets and config
-if str(_img_composer_dir) not in sys.path:
-    sys.path.insert(0, str(_img_composer_dir))
+# Standard Python imports from image_composer
+from image_composer.multi_persp import generate_composite_from_config
+from image_composer.presets import get_preset  # presets.py imports from multi_persp
 
-multi_persp = _import_module_from_path("multi_persp", _img_composer_dir / "multi-persp.py", add_to_path=_img_composer_dir)
-presets = _import_module_from_path("presets", _img_composer_dir / "presets.py", add_to_path=_img_composer_dir)
-
-# Import from detection-pipeline (has hyphen in directory name)
-_detection_pipeline_dir = Path(__file__).parent
-config_mod = _import_module_from_path("pipeline_config", _detection_pipeline_dir / "config.py")
-yolo_detector_mod = _import_module_from_path("yolo_detector", _detection_pipeline_dir / "yolo_detector.py")
-
-# Alias the imports for convenience
-generate_composite_from_config = multi_persp.generate_composite_from_config
-get_preset = presets.get_preset
-get_cfg = config_mod.get_cfg
-get_cfg_as_dict = config_mod.get_cfg_as_dict
-YOLODetector = yolo_detector_mod.YOLODetector
+# Standard Python imports from detection_pipeline modules
+from config import get_cfg, get_cfg_as_dict
+from yolo_detector import YOLODetector
 
 
 class DetectionPipeline:
@@ -88,7 +68,7 @@ class DetectionPipeline:
         Build projection configuration from YACS config.
 
         Returns:
-            dict: Configuration for image-composer with keys:
+            dict: Configuration for image_composer with keys:
                   img_path, proj_nbr, fov_h, fov_v, latitude, lon_0, lon_step,
                   grid, comp_sz, target_mp
         """

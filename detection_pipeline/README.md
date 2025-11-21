@@ -34,7 +34,7 @@ INPUT.IMAGE_PATH = "path/to/fisheye.png"
 # Projection preset: "yolo_grid", "default", "high_coverage", "horizon", "wide_angle", "high_res"
 PROJECTION.PRESET = "yolo_grid"  # 9 projections (3×3 grid, 640×640 composite)
 
-# YOLO model from detection-pipeline/models/
+# YOLO model from detection_pipeline/models/
 YOLO.MODEL = "models/yolov8n.pt"
 
 # Detection confidence threshold
@@ -51,7 +51,7 @@ YOLO.DEVICE = None  # Auto-detects: GPU if available, else CPU
 
 **Option A: Run test script**
 ```bash
-cd detection-pipeline
+cd detection_pipeline
 python test_pipeline.py
 ```
 
@@ -155,7 +155,7 @@ def run():
 ```
 
 **Features**:
-- Integrates image-composer API for composite generation
+- Integrates image_composer API for composite generation
 - Supports preset and custom projection configurations
 - Filters detections to "person" class by default
 - Optional visualization saving
@@ -239,7 +239,7 @@ PROJECTION.TARGET_MP = 'auto'  # Efficient: each projection = comp_size / grid_d
 Results are automatically saved in organized directory structure:
 
 ```
-detection-pipeline/results/{image_name}/{timestamp}/
+detection_pipeline/results/{image_name}/{timestamp}/
 ├── fisheye-sample.png                  # Original fisheye image
 ├── composite.png                       # Stitched composite image
 ├── detections.png                      # Composite with bounding boxes
@@ -297,7 +297,7 @@ print(f"Mapping matrices shape: {metadata['mapping_matrices'].shape}")
 ## Troubleshooting
 
 **Issue**: YOLO model not found
-- **Solution**: Ensure model exists in `detection-pipeline/models/` directory
+- **Solution**: Ensure model exists in `detection_pipeline/models/` directory
 - Check config: `YOLO.MODEL = "models/yolov8n.pt"`
 
 **Issue**: Detection too slow
@@ -332,6 +332,6 @@ print(f"Mapping matrices shape: {metadata['mapping_matrices'].shape}")
 
 ## References
 
-- Image Composer API: `../image-composer/`
+- Image Composer API: `../image_composer/`
 - Project Architecture: `../docs/ARCHITECTURE.md`
 - Full API Reference: `../docs/API.md`
