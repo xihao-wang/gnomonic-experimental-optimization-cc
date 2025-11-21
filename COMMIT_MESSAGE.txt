@@ -1,15 +1,12 @@
-feat: Implement detection pipeline for pedestrian detection in fisheye images
+feat: Improve detection pipeline with GPU auto-detect and organized results
 
-Add complete detection pipeline: read fisheye image, convert to composite image
-using multiple gnomonic projections, run YOLO detection, filter to person class.
+Auto-detect GPU/CPU device (CUDA if available, else CPU). Organize results in timestamped directories per image. Save single output with metadata.
 
 Changes:
-- image-composer/multi-persp.py: add generate_composite_from_config() function
-- image-composer/__init__.py: expose composite generation API
-- detection-pipeline/config.py: YACS configuration for image path, projection settings, YOLO model selection, and detection hyperparameters (confidence, IoU threshold)
-- detection-pipeline/yolo_detector.py: YOLO detector wrapper with person class filtering
-- detection-pipeline/pipeline.py: pipeline orchestrator (fisheye -> composite -> YOLO detection)
-- detection-pipeline/test_pipeline.py: end-to-end test on fisheye-sample.png
-- detection-pipeline/README.md: usage guide and examples
+- detection-pipeline/config.py: YOLO.DEVICE defaults to None for auto-detection
+- detection-pipeline/yolo_detector.py: auto-detect GPU if available using torch.cuda.is_available()
+- detection-pipeline/pipeline.py: refactor to save organized results in results/{image_name}/{timestamp}/ with 4 files (fisheye image, composite, detections with bboxes, metadata.txt)
+- detection-pipeline/test_pipeline.py: simplify to use organized output, remove redundant saving
+- detection-pipeline/README.md: update documentation for new output structure and GPU auto-detection
 
-Test result: detected 3 pedestrians on fisheye-sample.png, output saved to detection-composite-fisheye-sample.png
+Test result: 3 pedestrians detected on fisheye-sample.png with GPU (CUDA), results saved to timestamped directory with metadata file

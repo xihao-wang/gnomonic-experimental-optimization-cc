@@ -9,6 +9,7 @@ This module wraps ultralytics YOLO to provide:
 
 import numpy as np
 from ultralytics import YOLO
+import torch
 
 
 class YOLODetector:
@@ -19,7 +20,7 @@ class YOLODetector:
     The model version is determined by the model_name parameter.
     """
 
-    def __init__(self, model_name="yolov8n.pt", device="cpu", confidence_threshold=0.5,
+    def __init__(self, model_name="yolov8n.pt", device=None, confidence_threshold=0.5,
                  iou_threshold=0.45, max_detections=300):
         """
         Initialize YOLO detector.
@@ -30,20 +31,26 @@ class YOLODetector:
                              Format: yolo{version}{size}.pt where:
                              - version: 8, 11, etc.
                              - size: n (nano), s (small), m (medium), l (large), x (extra-large)
-            device (str): Device to run on: "cpu" or "cuda"
+            device (str or None): Device to run on: "cuda", "cpu", or None for auto-detect
+                                 If None, uses GPU if available, else CPU
             confidence_threshold (float): Confidence threshold for detections (0-1)
             iou_threshold (float): IoU threshold for NMS (0-1)
             max_detections (int): Maximum number of detections to keep
         """
         self.model_name = model_name
-        self.device = device
         self.confidence_threshold = confidence_threshold
         self.iou_threshold = iou_threshold
         self.max_detections = max_detections
 
+        # Auto-detect device if not specified
+        if device is None:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            self.device = device
+
         # Load model (ultralytics handles any YOLO version)
         self.model = YOLO(model_name)
-        self.model.to(device)
+        self.model.to(self.device)
 
     def detect(self, image, class_filter=None):
         """

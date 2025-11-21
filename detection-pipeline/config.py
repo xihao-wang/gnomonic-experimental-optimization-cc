@@ -29,7 +29,7 @@ _C = CN()
 _C.INPUT = CN()
 
 # Path to fisheye image to process
-_C.INPUT.IMAGE_PATH = "imgs/fisheye.png"
+_C.INPUT.IMAGE_PATH = "fisheye-sample.png"
 
 # ============================================================================
 # PROJECTION: Composite Image Configuration
@@ -79,18 +79,19 @@ _C.YOLO = CN()
 # Use relative path from detection-pipeline directory
 _C.YOLO.MODEL = "models/yolov8n.pt"
 
-# Device to run YOLO on: "cpu" or "cuda" (if GPU available)
-_C.YOLO.DEVICE = "cpu"
+# Device to run YOLO on: "cuda" or "cpu"
+# Set to None for auto-detection (GPU if available, else CPU)
+_C.YOLO.DEVICE = None
 
 # ---- Detection Parameters ----
 
 # Confidence threshold for detections (0-1)
 # Detections below this threshold are discarded
-_C.YOLO.CONFIDENCE_THRESHOLD = 0.5
+_C.YOLO.CONFIDENCE_THRESHOLD = 0.5  # 0.5
 
 # IoU threshold for Non-Maximum Suppression (NMS)
 # Controls how aggressively overlapping detections are merged
-_C.YOLO.IOU_THRESHOLD = 0.45
+_C.YOLO.IOU_THRESHOLD = 0.45  # 0.45
 
 # Maximum number of detections to keep per image
 _C.YOLO.MAX_DETECTIONS = 300

@@ -15,6 +15,8 @@ import numpy as np
 from pathlib import Path
 import sys
 import importlib.util
+import shutil
+from datetime import datetime
 
 # Helper function to import modules from directories with hyphens in their names
 def _import_module_from_path(module_name, filepath, add_to_path=None):
@@ -129,10 +131,11 @@ class DetectionPipeline:
         Execute the full detection pipeline.
 
         Returns:
-            tuple: (detections, composite_image, metadata) where:
+            tuple: (detections, composite_image, metadata, results_dir) where:
                 - detections: list of detection dicts in composite coordinate space
                 - composite_image: numpy array of composite image (H, W, 3)
                 - metadata: dict with projection info for backprojection
+                - results_dir: path to results directory for this run
         """
         if self.cfg.VERBOSE:
             print("=" * 80)
@@ -160,19 +163,11 @@ class DetectionPipeline:
         if self.cfg.VERBOSE:
             print(f"    ✓ Generated composite of size {composite_image.shape}")
 
-        # Optionally save composite image
-        if self.cfg.OUTPUT.SAVE_COMPOSITE:
-            save_path = Path(self.cfg.OUTPUT.SAVE_DIR) / "composite.png"
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            cv2.imwrite(str(save_path), composite_image)
-            if self.cfg.VERBOSE:
-                print(f"    Saved composite to: {save_path}")
-
         # Step 3: Run YOLO detection
         if self.cfg.VERBOSE:
             print("[3] Running YOLO detection on composite...")
             print(f"    Model: {self.cfg.YOLO.MODEL}")
-            print(f"    Device: {self.cfg.YOLO.DEVICE}")
+            print(f"    Device: {self.detector.device}")
             print(f"    Confidence threshold: {self.cfg.YOLO.CONFIDENCE_THRESHOLD}")
             print(f"    IoU threshold: {self.cfg.YOLO.IOU_THRESHOLD}")
 
@@ -184,25 +179,51 @@ class DetectionPipeline:
                 print(f"      [{i}] {det['class_name']} at ({det['x']:.3f}, {det['y']:.3f}), "
                       f"conf={det['confidence']:.3f}")
 
-        # Optionally save detection visualization on composite
-        if self.cfg.OUTPUT.SAVE_COMPOSITE_VIZ:
-            self._save_composite_viz(composite_image, detections)
+        # Step 4: Save results
+        results_dir = self._save_results(proj_cfg, composite_image, detections, metadata)
 
         if self.cfg.VERBOSE:
             print("=" * 80)
             print("DETECTION PIPELINE COMPLETE")
+            print(f"Results saved to: {results_dir}")
             print("=" * 80)
 
-        return detections, composite_image, metadata
+        return detections, composite_image, metadata, results_dir
 
-    def _save_composite_viz(self, composite_image, detections):
+    def _save_results(self, proj_cfg, composite_image, detections, metadata):
         """
-        Save visualization of detections on composite image.
+        Save detection results to organized directory structure.
+
+        Creates: results/image_name/timestamp/
+        Saves: fisheye_image.png, composite.png, detections.png, metadata.txt
 
         Args:
+            proj_cfg: projection configuration dict
             composite_image: numpy array (H, W, 3)
             detections: list of detection dicts
+            metadata: projection metadata dict
+
+        Returns:
+            Path to results directory
         """
+        # Get input image name and create directory structure
+        fisheye_path = Path(proj_cfg['img_path'])
+        image_name = fisheye_path.stem  # e.g., "fisheye-sample" from "fisheye-sample.png"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        results_base = Path(self.cfg.OUTPUT.SAVE_DIR)
+        results_dir = results_base / image_name / timestamp
+        results_dir.mkdir(parents=True, exist_ok=True)
+
+        # Step 1: Copy original fisheye image
+        fisheye_out = results_dir / f"{image_name}.png"
+        shutil.copy(str(fisheye_path), str(fisheye_out))
+
+        # Step 2: Save composite image
+        composite_out = results_dir / "composite.png"
+        cv2.imwrite(str(composite_out), composite_image)
+
+        # Step 3: Create and save detection visualization
         viz_image = composite_image.copy()
         h, w = viz_image.shape[:2]
 
@@ -226,12 +247,49 @@ class DetectionPipeline:
             cv2.putText(viz_image, label, (x1, y1 - 5),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        save_path = Path(self.cfg.OUTPUT.SAVE_DIR) / "composite_detections.png"
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(save_path), viz_image)
+        detections_out = results_dir / "detections.png"
+        cv2.imwrite(str(detections_out), viz_image)
+
+        # Step 4: Save metadata to text file
+        metadata_out = results_dir / "metadata.txt"
+        with open(str(metadata_out), 'w') as f:
+            f.write("Detection Pipeline Results\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Input Image: {fisheye_path.name}\n\n")
+
+            f.write("Projection Configuration:\n")
+            f.write(f"  Preset: {self.cfg.PROJECTION.PRESET}\n")
+            f.write(f"  Projections: {proj_cfg['proj_nbr']}\n")
+            f.write(f"  Grid Layout: {proj_cfg['grid']}\n")
+            f.write(f"  FOV H: {proj_cfg['fov_h']}°\n")
+            f.write(f"  FOV V: {proj_cfg['fov_v']}°\n")
+            f.write(f"  Latitude: {proj_cfg['latitude']}°\n")
+            f.write(f"  Composite Size: {proj_cfg['comp_sz']}\n\n")
+
+            f.write("YOLO Configuration:\n")
+            f.write(f"  Model: {self.cfg.YOLO.MODEL}\n")
+            f.write(f"  Device: {self.detector.device}\n")
+            f.write(f"  Confidence Threshold: {self.cfg.YOLO.CONFIDENCE_THRESHOLD}\n")
+            f.write(f"  IoU Threshold: {self.cfg.YOLO.IOU_THRESHOLD}\n\n")
+
+            f.write("Detection Results:\n")
+            f.write(f"  Total Pedestrians Detected: {len(detections)}\n\n")
+
+            if len(detections) > 0:
+                f.write("Detections:\n")
+                for i, det in enumerate(detections, 1):
+                    f.write(f"  [{i}] {det['class_name']} at ({det['x']:.3f}, {det['y']:.3f}), "
+                           f"confidence={det['confidence']:.3f}\n")
 
         if self.cfg.VERBOSE:
-            print(f"    Saved composite visualization to: {save_path}")
+            print(f"\n[4] Saving results...")
+            print(f"    Fisheye image: {fisheye_out}")
+            print(f"    Composite image: {composite_out}")
+            print(f"    Detections image: {detections_out}")
+            print(f"    Metadata: {metadata_out}")
+
+        return results_dir
 
 
 if __name__ == "__main__":
@@ -240,12 +298,13 @@ if __name__ == "__main__":
 
     # Optionally override config here
     # cfg.INPUT.IMAGE_PATH = "path/to/fisheye.png"
-    # cfg.YOLO.DEVICE = "cuda"
+    # cfg.YOLO.DEVICE = "cuda"  # or None for auto-detect
 
     cfg.VERBOSE = True
 
     pipeline = DetectionPipeline(cfg)
-    detections, composite, metadata = pipeline.run()
+    detections, composite, metadata, results_dir = pipeline.run()
 
     print(f"\nFound {len(detections)} pedestrians")
     print(f"Composite size: {composite.shape}")
+    print(f"Results saved to: {results_dir}")

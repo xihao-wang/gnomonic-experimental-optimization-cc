@@ -43,8 +43,8 @@ YOLO.CONFIDENCE_THRESHOLD = 0.5
 # NMS IoU threshold
 YOLO.IOU_THRESHOLD = 0.45
 
-# Device
-YOLO.DEVICE = "cpu"  # or "cuda" for GPU
+# Device: None (auto-detect GPU if available, else CPU), "cuda", or "cpu"
+YOLO.DEVICE = None  # Auto-detects: GPU if available, else CPU
 ```
 
 ### 2. Run Detection
@@ -236,19 +236,26 @@ PROJECTION.TARGET_MP = 'auto'  # Efficient: each projection = comp_size / grid_d
 
 ## Output
 
-After running the pipeline, outputs are saved based on config:
+Results are automatically saved in organized directory structure:
 
 ```
-detection-pipeline/
-├── composite.png                       # Raw composite image
-├── composite_detections.png            # Detections on composite
-└── detection-composite-{input}.png     # Final result with bboxes
+detection-pipeline/results/{image_name}/{timestamp}/
+├── fisheye-sample.png                  # Original fisheye image
+├── composite.png                       # Stitched composite image
+├── detections.png                      # Composite with bounding boxes
+└── metadata.txt                        # Configuration and results metadata
 ```
+
+Each run creates a timestamped subfolder, so multiple runs on the same image are preserved without overwriting.
+
+The metadata.txt file contains:
+- Projection configuration (grid, FOV, latitude, etc.)
+- YOLO configuration (model, device, thresholds)
+- All detected pedestrians with coordinates and confidence scores
 
 ## Example: Custom Workflow
 
 ```python
-from pathlib import Path
 from detection_pipeline.config import get_cfg
 from detection_pipeline.pipeline import DetectionPipeline
 import cv2
@@ -256,21 +263,27 @@ import cv2
 # Configure
 cfg = get_cfg()
 cfg.INPUT.IMAGE_PATH = "fisheye.png"
-cfg.YOLO.MODEL = "models/yolov8m.pt"  # Use medium model
-cfg.YOLO.DEVICE = "cuda"               # Use GPU
+cfg.YOLO.MODEL = "models/yolov8m.pt"  # Use medium model (slower but more accurate)
+cfg.YOLO.DEVICE = None                 # Auto-detect (GPU if available, else CPU)
 cfg.PROJECTION.PRESET = "high_coverage" # 8 projections
-cfg.OUTPUT.SAVE_COMPOSITE_VIZ = True
 cfg.VERBOSE = True
 
-# Run
+# Run (results automatically saved to organized directory)
 pipeline = DetectionPipeline(cfg)
-detections, composite, metadata = pipeline.run()
+detections, composite, metadata, results_dir = pipeline.run()
 
 # Process results
 print(f"Found {len(detections)} pedestrians")
 for det in detections:
     print(f"  Person at ({det['x']:.3f}, {det['y']:.3f}), "
-          f"conf={det['confidence']:.3f}")
+          f"confidence={det['confidence']:.3f}")
+
+print(f"\nResults saved to: {results_dir}")
+print(f"Files created:")
+print(f"  - fisheye-sample.png (original)")
+print(f"  - composite.png (projected composite)")
+print(f"  - detections.png (with bounding boxes)")
+print(f"  - metadata.txt (configuration & results)")
 
 # Access composite image
 cv2.imshow("Composite", composite)
@@ -288,13 +301,19 @@ print(f"Mapping matrices shape: {metadata['mapping_matrices'].shape}")
 - Check config: `YOLO.MODEL = "models/yolov8n.pt"`
 
 **Issue**: Detection too slow
-- **Solution**: Use smaller model (`yolov8n.pt`) or run on GPU (`YOLO.DEVICE = "cuda"`)
+- **Solution**: Device auto-detects GPU if available. Ensure CUDA is installed for GPU acceleration. Use smaller model if needed: `YOLO.MODEL = "models/yolov8n.pt"`
+
+**Issue**: Running on GPU instead of CPU
+- **Solution**: Set `YOLO.DEVICE = "cpu"` in config.py
+
+**Issue**: Running on CPU instead of GPU
+- **Solution**: Set `YOLO.DEVICE = "cuda"` or `None` (auto-detect). Ensure CUDA is installed and compatible.
 
 **Issue**: Detecting non-pedestrian objects
-- **Solution**: Verify `class_filter="person"` is active in pipeline.run()
+- **Solution**: Person filtering is automatic in `pipeline.run()`, only pedestrians should be detected
 
 **Issue**: GPU out of memory
-- **Solution**: Use CPU (`YOLO.DEVICE = "cpu"`) or reduce composite size
+- **Solution**: Use smaller model (`yolov8n.pt`) or use CPU (`YOLO.DEVICE = "cpu"`)
 
 ## Next Steps
 

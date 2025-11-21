@@ -42,63 +42,34 @@ def main():
     cfg.INPUT.IMAGE_PATH = str(Path(__file__).parent / "fisheye-sample.png")
     cfg.PROJECTION.PRESET = "yolo_grid"
     cfg.YOLO.MODEL = str(Path(__file__).parent / "models" / "yolov8n.pt")  # Use local model
-    cfg.YOLO.DEVICE = "cpu"  # Use CPU for testing
-    cfg.OUTPUT.SAVE_COMPOSITE = True
-    cfg.OUTPUT.SAVE_COMPOSITE_VIZ = True
-    cfg.OUTPUT.SAVE_DIR = str(Path(__file__).parent)
+    cfg.YOLO.DEVICE = None  # Auto-detect (GPU if available, else CPU)
+    cfg.OUTPUT.SAVE_DIR = str(Path(__file__).parent / "results")
     cfg.VERBOSE = True
 
     print(f"\nConfiguration:")
     print(f"  Image: {cfg.INPUT.IMAGE_PATH}")
     print(f"  Preset: {cfg.PROJECTION.PRESET}")
     print(f"  Model: {cfg.YOLO.MODEL}")
-    print(f"  Device: {cfg.YOLO.DEVICE}")
+    print(f"  Device: {cfg.YOLO.DEVICE} (will auto-detect)")
     print()
 
     # Run pipeline
     try:
         pipeline = DetectionPipeline(cfg)
-        detections, composite, metadata = pipeline.run()
-
-        # Save detection visualization
-        print("\n" + "=" * 80)
-        print("SAVING RESULTS")
-        print("=" * 80)
-
-        # Create detection visualization on composite
-        viz_image = composite.copy()
-        h, w = viz_image.shape[:2]
-
-        for i, det in enumerate(detections):
-            # Convert normalized coords to pixel coords
-            cx = int(det['x'] * w)
-            cy = int(det['y'] * h)
-            bw = int(det['w'] * w)
-            bh = int(det['h'] * h)
-
-            x1 = max(0, cx - bw // 2)
-            y1 = max(0, cy - bh // 2)
-            x2 = min(w, cx + bw // 2)
-            y2 = min(h, cy + bh // 2)
-
-            # Draw bounding box (green)
-            cv2.rectangle(viz_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-            # Draw label
-            label = f"{det['class_name']} {det['confidence']:.2f}"
-            cv2.putText(viz_image, label, (x1, max(0, y1 - 5)),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-        # Save as detection-composite-fisheye-sample.png
-        output_path = Path(__file__).parent / "detection-composite-fisheye-sample.png"
-        cv2.imwrite(str(output_path), viz_image)
-        print(f"\n✓ Saved detection visualization: {output_path}")
-        print(f"  Image size: {viz_image.shape}")
-        print(f"  Detections: {len(detections)}")
+        detections, composite, metadata, results_dir = pipeline.run()
 
         print("\n" + "=" * 80)
         print("TEST COMPLETE - SUCCESS")
         print("=" * 80)
+        print(f"\nResults Summary:")
+        print(f"  Detections: {len(detections)}")
+        print(f"  Results saved to: {results_dir}")
+        print(f"\nFiles created:")
+        print(f"  - fisheye-sample.png (original)")
+        print(f"  - composite.png (projected composite)")
+        print(f"  - detections.png (with bounding boxes)")
+        print(f"  - metadata.txt (configuration and results)")
+
         return 0
 
     except Exception as e:

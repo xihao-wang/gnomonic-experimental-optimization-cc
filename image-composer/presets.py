@@ -39,14 +39,14 @@ PRESETS = {
     # --------------------------------------------------------------------
     # High coverage configuration - 8 projections with 45° steps
     # --------------------------------------------------------------------
-    "high_coverage": {
-        "name": "High Coverage Configuration",
+    "chiang_conf": {
+        "name": "Configuration from Chiang et al. 2021 IAVC",
         "description": "8 projections with 45° longitude steps for better coverage",
         "img_path": DEFAULT_IMG_PATH,
         "proj_nbr": 8,
-        "fov_h": 75.0,
-        "fov_v": 60.0,
-        "latitude": 45.0,
+        "fov_h": 96.0,
+        "fov_v": 48.0,
+        "latitude": 36.0,
         "lon_0": 0.0,
         "lon_step": 45.0,
         "grid": None,

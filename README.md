@@ -1,5 +1,18 @@
 # Pedestrian Detection in Fisheye Images
 
+⚠️ **PROJECT STATUS: Early Stage Development**
+
+**Current Progress:**
+- ✅ Phase 1: Infrastructure complete
+- ✅ Phase 2.1-2.3: Detection pipeline functional
+- ✅ Phase 2.4: Results organization & GPU auto-detection
+- ⏳ Phase 2B: Backprojection (planned)
+- ⏳ Phase 3: Dataset loaders (planned)
+- ⏳ Phase 4: Evaluation metrics (planned)
+- ⏳ Phase 5: Configuration search (planned)
+
+---
+
 ## Project Overview
 
 This research project aims to detect pedestrians in omnidirectional (fisheye) images using a **projection-based approach**:
@@ -180,7 +193,3 @@ Find the optimal projection configuration that maximizes detection performance (
 - Computational efficiency
 
 Results will be compared across datasets to identify configurations that generalize well.
-
----
-
-**Project Status**: Infrastructure complete. Ready for module implementation.
