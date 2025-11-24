@@ -33,23 +33,35 @@ def create_side_by_side_viz(composite_viz, fisheye_viz, config_name):
     Create side-by-side visualization of composite and fisheye detections.
 
     Args:
-        composite_viz: Composite image with detections
-        fisheye_viz: Fisheye image with backprojected detections
+        composite_viz: Composite image with detections (or None)
+        fisheye_viz: Fisheye image with backprojected detections (or None)
         config_name: Name of the configuration for labeling
 
     Returns:
-        Combined side-by-side image
+        Combined side-by-side image or None if both inputs are None
     """
-    # Resize images to same height for side-by-side display
+    if composite_viz is None and fisheye_viz is None:
+        return None
+
     target_height = 800
 
-    comp_h, comp_w = composite_viz.shape[:2]
-    comp_scale = target_height / comp_h
-    comp_resized = cv2.resize(composite_viz, (int(comp_w * comp_scale), target_height))
+    # Handle composite image
+    if composite_viz is not None:
+        comp_h, comp_w = composite_viz.shape[:2]
+        comp_scale = target_height / comp_h
+        comp_resized = cv2.resize(composite_viz, (int(comp_w * comp_scale), target_height))
+    else:
+        # Create black placeholder
+        comp_resized = np.zeros((target_height, 640, 3), dtype=np.uint8)
 
-    fish_h, fish_w = fisheye_viz.shape[:2]
-    fish_scale = target_height / fish_h
-    fish_resized = cv2.resize(fisheye_viz, (int(fish_w * fish_scale), target_height))
+    # Handle fisheye image
+    if fisheye_viz is not None:
+        fish_h, fish_w = fisheye_viz.shape[:2]
+        fish_scale = target_height / fish_h
+        fish_resized = cv2.resize(fisheye_viz, (int(fish_w * fish_scale), target_height))
+    else:
+        # Create black placeholder
+        fish_resized = np.zeros((target_height, target_height, 3), dtype=np.uint8)
 
     # Create side-by-side image
     combined = np.hstack([comp_resized, fish_resized])
@@ -126,21 +138,31 @@ def test_projection_config(config_name, proj_nbr, grid, fov_h, fov_v, latitude, 
         print(f"  Detections in composite: {len(detections)}")
         print(f"  Backprojected to fisheye: {len(fisheye_bboxes) if fisheye_bboxes else 0}")
 
-        # Load visualization images
+        # Load visualization images - always generate comparison
         composite_viz_path = results_dir / "detections.png"
         fisheye_viz_path = results_dir / "fisheye_detections.png"
+        fisheye_plain_path = results_dir / "fisheye-sample.png"
 
-        if composite_viz_path.exists() and fisheye_viz_path.exists():
+        # Load composite visualization (use detections.png if exists, else composite.png)
+        if composite_viz_path.exists():
             composite_viz = cv2.imread(str(composite_viz_path))
+        else:
+            composite_path = results_dir / "composite.png"
+            composite_viz = cv2.imread(str(composite_path)) if composite_path.exists() else None
+
+        # Load fisheye visualization (use fisheye_detections.png if exists, else plain fisheye)
+        if fisheye_viz_path.exists():
             fisheye_viz = cv2.imread(str(fisheye_viz_path))
+        else:
+            fisheye_viz = cv2.imread(str(fisheye_plain_path)) if fisheye_plain_path.exists() else None
 
-            # Create side-by-side visualization
+        # Always create side-by-side visualization
+        if composite_viz is not None or fisheye_viz is not None:
             side_by_side = create_side_by_side_viz(composite_viz, fisheye_viz, config_name)
-
-            # Save side-by-side visualization
-            side_by_side_path = test_results_dir / f"{config_name}_comparison.png"
-            cv2.imwrite(str(side_by_side_path), side_by_side)
-            print(f"  Side-by-side visualization: {side_by_side_path}")
+            if side_by_side is not None:
+                side_by_side_path = test_results_dir / f"{config_name}_comparison.png"
+                cv2.imwrite(str(side_by_side_path), side_by_side)
+                print(f"  Side-by-side visualization: {side_by_side_path}")
 
         return (True, len(detections), len(fisheye_bboxes) if fisheye_bboxes else 0)
 

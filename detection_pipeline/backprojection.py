@@ -385,3 +385,32 @@ def visualize_backprojection(fisheye_image: np.ndarray,
         cv2.imwrite(output_path, viz_image)
 
     return viz_image
+
+
+def visualize_bbox_corners(fisheye_image: np.ndarray,
+                          fisheye_bboxes: List[Dict],
+                          output_path: Optional[str] = None) -> np.ndarray:
+    """
+    Create visualization showing the 4 corners of each backprojected bbox as red circles.
+
+    Args:
+        fisheye_image: Original fisheye image
+        fisheye_bboxes: List of backprojected bbox dicts with 'corners' key
+        output_path: Optional path to save visualization
+
+    Returns:
+        Image with bbox corners drawn as red filled circles
+    """
+    viz_image = fisheye_image.copy()
+
+    for bbox in fisheye_bboxes:
+        corners = bbox['corners']
+        # Draw each corner as a red filled circle
+        for corner in corners:
+            x, y = int(corner[0]), int(corner[1])
+            cv2.circle(viz_image, (x, y), 5, (0, 0, 255), -1)  # Red in BGR, filled
+
+    if output_path:
+        cv2.imwrite(output_path, viz_image)
+
+    return viz_image

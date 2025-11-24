@@ -29,7 +29,7 @@ from image_composer.presets import get_preset  # presets.py imports from multi_p
 # Standard Python imports from detection_pipeline modules
 from config import get_cfg, get_cfg_as_dict
 from yolo_detector import YOLODetector
-from backprojection import backproject_detections, visualize_backprojection
+from backprojection import backproject_detections, visualize_backprojection, visualize_bbox_corners
 
 
 class DetectionPipeline:
@@ -289,12 +289,19 @@ class DetectionPipeline:
         if fisheye_bboxes is not None and len(fisheye_bboxes) > 0:
             fisheye_img = cv2.imread(str(fisheye_path))
             if fisheye_img is not None:
+                # Save fisheye with bboxes
                 fisheye_viz = visualize_backprojection(fisheye_img, fisheye_bboxes)
                 fisheye_viz_out = results_dir / "fisheye_detections.png"
                 cv2.imwrite(str(fisheye_viz_out), fisheye_viz)
 
+                # Save fisheye with bbox corners
+                fisheye_corners = visualize_bbox_corners(fisheye_img, fisheye_bboxes)
+                fisheye_corners_out = results_dir / "fisheye_bbox_corners.png"
+                cv2.imwrite(str(fisheye_corners_out), fisheye_corners)
+
                 if self.cfg.VERBOSE:
                     print(f"    Fisheye detections: {fisheye_viz_out}")
+                    print(f"    Fisheye bbox corners: {fisheye_corners_out}")
 
         if self.cfg.VERBOSE:
             print(f"\n[5] Saving results...")
