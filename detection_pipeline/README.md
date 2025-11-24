@@ -234,6 +234,30 @@ PROJECTION.COMP_SIZE = (640, 640)
 PROJECTION.TARGET_MP = 'auto'  # Efficient: each projection = comp_size / grid_dims
 ```
 
+## Backprojection
+
+Backprojection maps detections from composite coordinates back to fisheye with radial alignment.
+
+**Method** (`build_radial_bbox`):
+
+1. **Center**: Backproject bbox center from composite (x_comp, y_comp) → fisheye (x_fish, y_fish)
+
+2. **Width**: Backproject left and right edges at center height, measure distance:
+   - Left: (x - w/2, y) → (x_left, y_left)
+   - Right: (x + w/2, y) → (x_right, y_right)
+   - width_fish = distance(left, right)
+
+3. **Height**: Backproject top and bottom edges at center width, measure distance:
+   - Top: (x, y - h/2) → (x_top, y_top)
+   - Bottom: (x, y + h/2) → (x_bottom, y_bottom)
+   - height_fish = distance(top, bottom)
+
+4. **Radial alignment**: Rotate bbox by angle from fisheye center to bbox center
+
+5. **Build corners**: Create 4 corners from center ± width/2, ± height/2, rotated
+
+**Lattice visualization**: Aspect-ratio aware grid (width_samples = height_samples × aspect_ratio) backprojected to show distortion. One image per bbox: `fisheye_bbox_lattice_N.png`
+
 ## Output
 
 Results are automatically saved in organized directory structure:
