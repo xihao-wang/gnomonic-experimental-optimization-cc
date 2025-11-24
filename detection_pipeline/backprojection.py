@@ -261,43 +261,58 @@ def backproject_bbox(bbox: Dict, metadata: Dict,
     # Identify which projection cell the bbox center belongs to
     cell_row, cell_col = identify_projection_cell(x_comp, y_comp, comp_width, comp_height, grid)
 
-    # Calculate lattice sampling based on aspect ratio
-    # If bbox is w=50, h=100 (ratio 0.5), and height_samples=10, then width_samples=5
+    # Define the 4 corners of the bbox in composite space
+    corner_coords = [
+        (x1_comp, y1_comp),  # Top-left
+        (x2_comp, y1_comp),  # Top-right
+        (x2_comp, y2_comp),  # Bottom-right
+        (x1_comp, y2_comp),  # Bottom-left
+    ]
+
+    # Backproject the 4 corners for bbox fitting
+    fisheye_corners = []
+    for x_c, y_c in corner_coords:
+        x_proj, y_proj = composite_to_projection_coords(
+            x_c, y_c, cell_row, cell_col,
+            comp_width, comp_height, proj_width, proj_height, grid
+        )
+        x_fish, y_fish = projection_to_fisheye_coords(
+            x_proj, y_proj, cell_row, cell_col,
+            mapping_matrices, grid
+        )
+        fisheye_corners.append((x_fish, y_fish))
+
+    # Check if corner backprojection was successful
+    fisheye_corners = np.array(fisheye_corners)
+    if np.any(np.isnan(fisheye_corners)) or np.any(np.isinf(fisheye_corners)):
+        return None
+
+    # Fit radially-aligned bbox using ONLY the 4 corners
+    radial_bbox = fit_radial_bbox(fisheye_corners.tolist(), (fisheye_cx, fisheye_cy))
+
+    # Now sample lattice points for visualization (not for fitting)
     aspect_ratio = w_comp / h_comp if h_comp > 0 else 1.0
     lattice_width_samples = max(2, int(lattice_height_samples * aspect_ratio))
 
-    # Sample lattice points within bbox
     x_samples = np.linspace(x1_comp, x2_comp, lattice_width_samples)
     y_samples = np.linspace(y1_comp, y2_comp, lattice_height_samples)
 
-    # Backproject all lattice points
+    # Backproject all lattice points for visualization
     fisheye_lattice = []
     for y_s in y_samples:
         for x_s in x_samples:
-            # Convert to projection coordinates
             x_proj, y_proj = composite_to_projection_coords(
                 x_s, y_s, cell_row, cell_col,
                 comp_width, comp_height, proj_width, proj_height, grid
             )
-
-            # Map to fisheye coordinates
             x_fish, y_fish = projection_to_fisheye_coords(
                 x_proj, y_proj, cell_row, cell_col,
                 mapping_matrices, grid
             )
-
             fisheye_lattice.append((x_fish, y_fish))
 
-    # Check if backprojection was successful (valid fisheye coords)
-    fisheye_lattice = np.array(fisheye_lattice)
-    if np.any(np.isnan(fisheye_lattice)) or np.any(np.isinf(fisheye_lattice)):
-        return None
-
-    # Fit radially-aligned bbox to all lattice points
-    radial_bbox = fit_radial_bbox(fisheye_lattice.tolist(), (fisheye_cx, fisheye_cy))
-
-    # Add lattice points to bbox dict
-    radial_bbox['lattice_points'] = fisheye_lattice.tolist()
+    # Add lattice points to bbox dict (for visualization only)
+    radial_bbox['lattice_points'] = fisheye_lattice
 
     # Add detection metadata if available
     if 'confidence' in bbox:
