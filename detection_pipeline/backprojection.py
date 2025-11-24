@@ -127,17 +127,21 @@ def calculate_radial_angle(x: float, y: float, cx: float, cy: float) -> float:
     return angle
 
 
-def fit_radial_bbox(points_fisheye: List[Tuple[float, float]],
-                   fisheye_center: Tuple[float, float]) -> Dict:
+def build_radial_bbox(bbox_center: Tuple[float, float],
+                     width: float,
+                     height: float,
+                     fisheye_center: Tuple[float, float]) -> Dict:
     """
-    Fit a radially-aligned rotated rectangle to a set of fisheye points.
+    Build a radially-aligned rotated rectangle from center and dimensions.
 
     The rectangle is oriented such that one pair of sides points toward/away from
     the fisheye center (radial direction), and the other pair is perpendicular
     (tangential direction).
 
     Args:
-        points_fisheye: List of (x, y) coordinates in fisheye image
+        bbox_center: (x, y) center of bbox in fisheye coordinates
+        width: Width of bbox in fisheye (distance in pixels)
+        height: Height of bbox in fisheye (distance in pixels)
         fisheye_center: (cx, cy) center of fisheye image
 
     Returns:
@@ -148,48 +152,33 @@ def fit_radial_bbox(points_fisheye: List[Tuple[float, float]],
             - corners: List of 4 (x, y) corner points
     """
     cx, cy = fisheye_center
-    points = np.array(points_fisheye)
+    center_x, center_y = bbox_center
 
-    # Calculate center of backprojected points
-    center_x = np.mean(points[:, 0])
-    center_y = np.mean(points[:, 1])
-
-    # Calculate radial angle at this center point
+    # Calculate radial angle at bbox center
     radial_angle = calculate_radial_angle(center_x, center_y, cx, cy)
 
     # Create rotation matrix for radial alignment
-    # Radial direction is along the angle, tangential is perpendicular
     cos_a = np.cos(radial_angle)
     sin_a = np.sin(radial_angle)
 
-    # Transform points to radial coordinate system (centered at bbox center)
-    points_centered = points - np.array([center_x, center_y])
+    # Build 4 corners in unrotated frame (centered at origin)
+    # radial direction = x-axis, tangential = y-axis
+    half_width = width / 2
+    half_height = height / 2
 
-    # Rotate to align with radial direction (radial = x-axis, tangential = y-axis)
-    rotation_matrix = np.array([[cos_a, sin_a], [-sin_a, cos_a]])
-    points_rotated = points_centered @ rotation_matrix.T
-
-    # Find extent in rotated frame
-    min_x = np.min(points_rotated[:, 0])
-    max_x = np.max(points_rotated[:, 0])
-    min_y = np.min(points_rotated[:, 1])
-    max_y = np.max(points_rotated[:, 1])
-
-    # Size of the aligned bbox
-    width = max_x - min_x
-    height = max_y - min_y
-
-    # Calculate the 4 corners in rotated frame
-    corners_rotated = np.array([
-        [min_x, min_y],  # Bottom-left in rotated frame
-        [max_x, min_y],  # Bottom-right
-        [max_x, max_y],  # Top-right
-        [min_x, max_y],  # Top-left
+    corners_unrotated = np.array([
+        [-half_width, -half_height],  # Bottom-left
+        [ half_width, -half_height],  # Bottom-right
+        [ half_width,  half_height],  # Top-right
+        [-half_width,  half_height],  # Top-left
     ])
 
-    # Rotate corners back to image frame
-    inv_rotation = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-    corners_image = corners_rotated @ inv_rotation.T + np.array([center_x, center_y])
+    # Rotate corners by radial angle
+    rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    corners_rotated = corners_unrotated @ rotation_matrix.T
+
+    # Shift corners to bbox center
+    corners_image = corners_rotated + np.array([center_x, center_y])
 
     # Convert angle to degrees for OpenCV
     angle_deg = np.degrees(radial_angle)
@@ -261,34 +250,71 @@ def backproject_bbox(bbox: Dict, metadata: Dict,
     # Identify which projection cell the bbox center belongs to
     cell_row, cell_col = identify_projection_cell(x_comp, y_comp, comp_width, comp_height, grid)
 
-    # Define the 4 corners of the bbox in composite space
-    corner_coords = [
-        (x1_comp, y1_comp),  # Top-left
-        (x2_comp, y1_comp),  # Top-right
-        (x2_comp, y2_comp),  # Bottom-right
-        (x1_comp, y2_comp),  # Bottom-left
-    ]
+    # Backproject the bbox center directly
+    x_proj_center, y_proj_center = composite_to_projection_coords(
+        x_comp, y_comp, cell_row, cell_col,
+        comp_width, comp_height, proj_width, proj_height, grid
+    )
+    x_fish_center, y_fish_center = projection_to_fisheye_coords(
+        x_proj_center, y_proj_center, cell_row, cell_col,
+        mapping_matrices, grid
+    )
 
-    # Backproject the 4 corners for bbox fitting
-    fisheye_corners = []
-    for x_c, y_c in corner_coords:
-        x_proj, y_proj = composite_to_projection_coords(
-            x_c, y_c, cell_row, cell_col,
-            comp_width, comp_height, proj_width, proj_height, grid
-        )
-        x_fish, y_fish = projection_to_fisheye_coords(
-            x_proj, y_proj, cell_row, cell_col,
-            mapping_matrices, grid
-        )
-        fisheye_corners.append((x_fish, y_fish))
-
-    # Check if corner backprojection was successful
-    fisheye_corners = np.array(fisheye_corners)
-    if np.any(np.isnan(fisheye_corners)) or np.any(np.isinf(fisheye_corners)):
+    # Check if center backprojection was successful
+    if np.isnan(x_fish_center) or np.isnan(y_fish_center) or np.isinf(x_fish_center) or np.isinf(y_fish_center):
         return None
 
-    # Fit radially-aligned bbox using ONLY the 4 corners
-    radial_bbox = fit_radial_bbox(fisheye_corners.tolist(), (fisheye_cx, fisheye_cy))
+    # Backproject width: left and right edges at center height
+    x_proj_left, y_proj_left = composite_to_projection_coords(
+        x1_comp, y_comp, cell_row, cell_col,
+        comp_width, comp_height, proj_width, proj_height, grid
+    )
+    x_fish_left, y_fish_left = projection_to_fisheye_coords(
+        x_proj_left, y_proj_left, cell_row, cell_col,
+        mapping_matrices, grid
+    )
+
+    x_proj_right, y_proj_right = composite_to_projection_coords(
+        x2_comp, y_comp, cell_row, cell_col,
+        comp_width, comp_height, proj_width, proj_height, grid
+    )
+    x_fish_right, y_fish_right = projection_to_fisheye_coords(
+        x_proj_right, y_proj_right, cell_row, cell_col,
+        mapping_matrices, grid
+    )
+
+    # Calculate width in fisheye as distance between left and right edges
+    width_fish = np.sqrt((x_fish_right - x_fish_left)**2 + (y_fish_right - y_fish_left)**2)
+
+    # Backproject height: top and bottom edges at center width
+    x_proj_top, y_proj_top = composite_to_projection_coords(
+        x_comp, y1_comp, cell_row, cell_col,
+        comp_width, comp_height, proj_width, proj_height, grid
+    )
+    x_fish_top, y_fish_top = projection_to_fisheye_coords(
+        x_proj_top, y_proj_top, cell_row, cell_col,
+        mapping_matrices, grid
+    )
+
+    x_proj_bottom, y_proj_bottom = composite_to_projection_coords(
+        x_comp, y2_comp, cell_row, cell_col,
+        comp_width, comp_height, proj_width, proj_height, grid
+    )
+    x_fish_bottom, y_fish_bottom = projection_to_fisheye_coords(
+        x_proj_bottom, y_proj_bottom, cell_row, cell_col,
+        mapping_matrices, grid
+    )
+
+    # Calculate height in fisheye as distance between top and bottom edges
+    height_fish = np.sqrt((x_fish_bottom - x_fish_top)**2 + (y_fish_bottom - y_fish_top)**2)
+
+    # Check for invalid dimensions
+    if np.isnan(width_fish) or np.isnan(height_fish) or width_fish <= 0 or height_fish <= 0:
+        return None
+
+    # Build radially-aligned bbox from center and dimensions
+    fisheye_bbox_center = (x_fish_center, y_fish_center)
+    radial_bbox = build_radial_bbox(fisheye_bbox_center, width_fish, height_fish, (fisheye_cx, fisheye_cy))
 
     # Now sample lattice points for visualization (not for fitting)
     aspect_ratio = w_comp / h_comp if h_comp > 0 else 1.0
