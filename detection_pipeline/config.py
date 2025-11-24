@@ -105,6 +105,11 @@ _C.BACKPROJECTION = CN()
 # Enable backprojection of detections to fisheye coordinates
 _C.BACKPROJECTION.ENABLED = True
 
+# Number of lattice points to sample along bbox height
+# Width samples are calculated automatically based on bbox aspect ratio
+# Higher values = more detailed distortion visualization (e.g., 10, 15, 20)
+_C.BACKPROJECTION.LATTICE_HEIGHT_SAMPLES = 10
+
 # ============================================================================
 # OUTPUT: Visualization and Results
 # ============================================================================

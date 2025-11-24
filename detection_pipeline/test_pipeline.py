@@ -58,6 +58,7 @@ def main():
         print(f"  - detections.png (with bounding boxes on composite)")
         if fisheye_bboxes:
             print(f"  - fisheye_detections.png (backprojected bboxes on fisheye)")
+            print(f"  - fisheye_bbox_lattice_N.png (one per bbox, showing lattice distortion)")
         print(f"  - metadata.txt (configuration and results)")
 
         return 0

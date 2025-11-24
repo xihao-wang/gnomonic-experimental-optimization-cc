@@ -29,7 +29,7 @@ from image_composer.presets import get_preset  # presets.py imports from multi_p
 # Standard Python imports from detection_pipeline modules
 from config import get_cfg, get_cfg_as_dict
 from yolo_detector import YOLODetector
-from backprojection import backproject_detections, visualize_backprojection, visualize_bbox_corners
+from backprojection import backproject_detections, visualize_backprojection, visualize_bbox_lattice
 
 
 class DetectionPipeline:
@@ -173,13 +173,17 @@ class DetectionPipeline:
                 print(f"    WARNING: Could not load fisheye image for backprojection")
             else:
                 fisheye_shape = fisheye_img.shape[:2]  # (height, width)
-                fisheye_bboxes = backproject_detections(detections, metadata, fisheye_shape)
+                fisheye_bboxes = backproject_detections(
+                    detections, metadata, fisheye_shape,
+                    lattice_height_samples=self.cfg.BACKPROJECTION.LATTICE_HEIGHT_SAMPLES
+                )
 
                 if self.cfg.VERBOSE:
                     print(f"    ✓ Backprojected {len(fisheye_bboxes)} bboxes to fisheye")
                     for i, bbox in enumerate(fisheye_bboxes):
+                        num_lattice = len(bbox.get('lattice_points', []))
                         print(f"      [{i}] {bbox['class_name']} at center ({bbox['center'][0]:.1f}, {bbox['center'][1]:.1f}), "
-                              f"angle={bbox['angle']:.1f}°")
+                              f"angle={bbox['angle']:.1f}°, lattice: {num_lattice} points")
 
         # Step 5: Save results
         results_dir = self._save_results(proj_cfg, composite_image, detections, metadata, fisheye_bboxes)
@@ -294,14 +298,19 @@ class DetectionPipeline:
                 fisheye_viz_out = results_dir / "fisheye_detections.png"
                 cv2.imwrite(str(fisheye_viz_out), fisheye_viz)
 
-                # Save fisheye with bbox corners
-                fisheye_corners = visualize_bbox_corners(fisheye_img, fisheye_bboxes)
-                fisheye_corners_out = results_dir / "fisheye_bbox_corners.png"
-                cv2.imwrite(str(fisheye_corners_out), fisheye_corners)
-
+                # Save individual lattice visualization for each bbox
                 if self.cfg.VERBOSE:
                     print(f"    Fisheye detections: {fisheye_viz_out}")
-                    print(f"    Fisheye bbox corners: {fisheye_corners_out}")
+                    print(f"    Fisheye bbox lattices (individual):")
+
+                for i, bbox in enumerate(fisheye_bboxes):
+                    # Visualize only this bbox's lattice
+                    fisheye_lattice = visualize_bbox_lattice(fisheye_img, [bbox])
+                    fisheye_lattice_out = results_dir / f"fisheye_bbox_lattice_{i}.png"
+                    cv2.imwrite(str(fisheye_lattice_out), fisheye_lattice)
+
+                    if self.cfg.VERBOSE:
+                        print(f"      [{i}] {fisheye_lattice_out}")
 
         if self.cfg.VERBOSE:
             print(f"\n[5] Saving results...")
