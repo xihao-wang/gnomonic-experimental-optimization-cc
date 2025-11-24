@@ -42,18 +42,22 @@ def main():
     # Run pipeline
     try:
         pipeline = DetectionPipeline(cfg)
-        detections, composite, metadata, results_dir = pipeline.run()
+        detections, composite, metadata, results_dir, fisheye_bboxes = pipeline.run()
 
         print("\n" + "=" * 80)
         print("TEST COMPLETE - SUCCESS")
         print("=" * 80)
         print(f"\nResults Summary:")
         print(f"  Detections: {len(detections)}")
+        if fisheye_bboxes:
+            print(f"  Backprojected bboxes: {len(fisheye_bboxes)}")
         print(f"  Results saved to: {results_dir}")
         print(f"\nFiles created:")
         print(f"  - fisheye-sample.png (original)")
         print(f"  - composite.png (projected composite)")
-        print(f"  - detections.png (with bounding boxes)")
+        print(f"  - detections.png (with bounding boxes on composite)")
+        if fisheye_bboxes:
+            print(f"  - fisheye_detections.png (backprojected bboxes on fisheye)")
         print(f"  - metadata.txt (configuration and results)")
 
         return 0

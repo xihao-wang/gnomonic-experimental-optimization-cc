@@ -29,6 +29,7 @@ from image_composer.presets import get_preset  # presets.py imports from multi_p
 # Standard Python imports from detection_pipeline modules
 from config import get_cfg, get_cfg_as_dict
 from yolo_detector import YOLODetector
+from backprojection import backproject_detections, visualize_backprojection
 
 
 class DetectionPipeline:
@@ -111,11 +112,12 @@ class DetectionPipeline:
         Execute the full detection pipeline.
 
         Returns:
-            tuple: (detections, composite_image, metadata, results_dir) where:
+            tuple: (detections, composite_image, metadata, results_dir, fisheye_bboxes) where:
                 - detections: list of detection dicts in composite coordinate space
                 - composite_image: numpy array of composite image (H, W, 3)
                 - metadata: dict with projection info for backprojection
                 - results_dir: path to results directory for this run
+                - fisheye_bboxes: list of backprojected bbox dicts (None if backprojection disabled)
         """
         if self.cfg.VERBOSE:
             print("=" * 80)
@@ -159,8 +161,28 @@ class DetectionPipeline:
                 print(f"      [{i}] {det['class_name']} at ({det['x']:.3f}, {det['y']:.3f}), "
                       f"conf={det['confidence']:.3f}")
 
-        # Step 4: Save results
-        results_dir = self._save_results(proj_cfg, composite_image, detections, metadata)
+        # Step 4: Backproject to fisheye coordinates (if enabled)
+        fisheye_bboxes = None
+        if self.cfg.BACKPROJECTION.ENABLED and len(detections) > 0:
+            if self.cfg.VERBOSE:
+                print("[4] Backprojecting detections to fisheye coordinates...")
+
+            # Load original fisheye image for backprojection
+            fisheye_img = cv2.imread(proj_cfg['img_path'])
+            if fisheye_img is None:
+                print(f"    WARNING: Could not load fisheye image for backprojection")
+            else:
+                fisheye_shape = fisheye_img.shape[:2]  # (height, width)
+                fisheye_bboxes = backproject_detections(detections, metadata, fisheye_shape)
+
+                if self.cfg.VERBOSE:
+                    print(f"    ✓ Backprojected {len(fisheye_bboxes)} bboxes to fisheye")
+                    for i, bbox in enumerate(fisheye_bboxes):
+                        print(f"      [{i}] {bbox['class_name']} at center ({bbox['center'][0]:.1f}, {bbox['center'][1]:.1f}), "
+                              f"angle={bbox['angle']:.1f}°")
+
+        # Step 5: Save results
+        results_dir = self._save_results(proj_cfg, composite_image, detections, metadata, fisheye_bboxes)
 
         if self.cfg.VERBOSE:
             print("=" * 80)
@@ -168,20 +190,21 @@ class DetectionPipeline:
             print(f"Results saved to: {results_dir}")
             print("=" * 80)
 
-        return detections, composite_image, metadata, results_dir
+        return detections, composite_image, metadata, results_dir, fisheye_bboxes
 
-    def _save_results(self, proj_cfg, composite_image, detections, metadata):
+    def _save_results(self, proj_cfg, composite_image, detections, metadata, fisheye_bboxes=None):
         """
         Save detection results to organized directory structure.
 
         Creates: results/image_name/timestamp/
-        Saves: fisheye_image.png, composite.png, detections.png, metadata.txt
+        Saves: fisheye_image.png, composite.png, detections.png, metadata.txt, fisheye_detections.png (if backprojection enabled)
 
         Args:
             proj_cfg: projection configuration dict
             composite_image: numpy array (H, W, 3)
             detections: list of detection dicts
             metadata: projection metadata dict
+            fisheye_bboxes: list of backprojected bbox dicts (optional)
 
         Returns:
             Path to results directory
@@ -262,8 +285,19 @@ class DetectionPipeline:
                     f.write(f"  [{i}] {det['class_name']} at ({det['x']:.3f}, {det['y']:.3f}), "
                            f"confidence={det['confidence']:.3f}\n")
 
+        # Step 5: Save fisheye visualization if backprojection was performed
+        if fisheye_bboxes is not None and len(fisheye_bboxes) > 0:
+            fisheye_img = cv2.imread(str(fisheye_path))
+            if fisheye_img is not None:
+                fisheye_viz = visualize_backprojection(fisheye_img, fisheye_bboxes)
+                fisheye_viz_out = results_dir / "fisheye_detections.png"
+                cv2.imwrite(str(fisheye_viz_out), fisheye_viz)
+
+                if self.cfg.VERBOSE:
+                    print(f"    Fisheye detections: {fisheye_viz_out}")
+
         if self.cfg.VERBOSE:
-            print(f"\n[4] Saving results...")
+            print(f"\n[5] Saving results...")
             print(f"    Fisheye image: {fisheye_out}")
             print(f"    Composite image: {composite_out}")
             print(f"    Detections image: {detections_out}")
@@ -283,8 +317,10 @@ if __name__ == "__main__":
     cfg.VERBOSE = True
 
     pipeline = DetectionPipeline(cfg)
-    detections, composite, metadata, results_dir = pipeline.run()
+    detections, composite, metadata, results_dir, fisheye_bboxes = pipeline.run()
 
     print(f"\nFound {len(detections)} pedestrians")
     print(f"Composite size: {composite.shape}")
+    if fisheye_bboxes:
+        print(f"Backprojected {len(fisheye_bboxes)} bboxes to fisheye")
     print(f"Results saved to: {results_dir}")

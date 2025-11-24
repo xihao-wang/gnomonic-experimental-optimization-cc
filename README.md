@@ -34,8 +34,8 @@ This research project aims to detect pedestrians in omnidirectional (fisheye) im
 
 ```
 project-root/
-├── image-composer/              # ✓ Existing API - creates composite images
-├── detection-pipeline/          # Detection pipeline implementation
+├── image_composer/              # ✓ Existing API - creates composite images
+├── detection_pipeline/          # Detection pipeline implementation
 ├── datasets/                    # Dataset loaders & adapters
 ├── evaluation/                  # Metrics computation & analysis
 ├── config_search/               # Configuration search & comparison
@@ -66,7 +66,7 @@ pip install ultralytics opencv-python numpy scikit-learn matplotlib
 Edit configuration files in order:
 1. `project_config.py` - Project-wide settings
 2. `datasets/config.py` - Dataset paths
-3. `detection-pipeline/config.py` - Pipeline parameters
+3. `detection_pipeline/config.py` - Pipeline parameters
 4. `evaluation/config.py` - Evaluation metrics
 5. `config_search/config.py` - Search parameters
 
@@ -105,8 +105,8 @@ For detailed setup instructions, see `docs/SETUP.md`
 
 ## Module Overview
 
-### `detection-pipeline/`
-Executes detection on individual images. Uses the image-composer API to generate composites, runs YOLO, and backprojects results to fisheye coordinates.
+### `detection_pipeline/`
+Executes detection on individual images. Uses the image_composer API to generate composites, runs YOLO, and backprojects results to fisheye coordinates.
 
 ### `datasets/`
 Abstracts different dataset formats (BOMNI, PIROPO). Provides unified `DatasetLoader` interface that handles format differences transparently.
@@ -178,7 +178,7 @@ pillow         # Image I/O
 
 **Dataset not found**: Verify paths in `datasets/config.py` are correct and use absolute paths.
 
-**GPU not detected**: Set `YOLO_DEVICE = "cpu"` in `detection-pipeline/config.py`.
+**GPU not detected**: Set `YOLO_DEVICE = "cpu"` in `detection_pipeline/config.py`.
 
 **Memory issues**: Reduce `COMPOSITE_SIZE` or use smaller YOLO model (`yolov8n.pt`).
 

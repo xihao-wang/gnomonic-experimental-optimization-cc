@@ -77,7 +77,7 @@ _C.YOLO = CN()
 # Available: yolov8n.pt, yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt
 #            yolo11n.pt, yolo11s.pt, yolo12n.pt, yolo12s.pt, yolo12x.pt, etc.
 # Use relative path from detection-pipeline directory
-_C.YOLO.MODEL = "models/yolov8n.pt"
+_C.YOLO.MODEL = "models/yolo12x.pt"
 
 # Device to run YOLO on: "cuda" or "cpu"
 # Set to None for auto-detection (GPU if available, else CPU)
@@ -97,19 +97,28 @@ _C.YOLO.IOU_THRESHOLD = 0.45  # 0.45
 _C.YOLO.MAX_DETECTIONS = 300
 
 # ============================================================================
+# BACKPROJECTION: Fisheye Coordinate Transformation
+# ============================================================================
+
+_C.BACKPROJECTION = CN()
+
+# Enable backprojection of detections to fisheye coordinates
+_C.BACKPROJECTION.ENABLED = True
+
+# ============================================================================
 # OUTPUT: Visualization and Results
 # ============================================================================
 
 _C.OUTPUT = CN()
 
 # Save intermediate composite image before YOLO
-_C.OUTPUT.SAVE_COMPOSITE = False
+_C.OUTPUT.SAVE_COMPOSITE = True
 
 # Save visualization of detections on composite image
-_C.OUTPUT.SAVE_COMPOSITE_VIZ = False
+_C.OUTPUT.SAVE_COMPOSITE_VIZ = True
 
 # Save visualization of detections on original fisheye image (after backprojection)
-_C.OUTPUT.SAVE_FISHEYE_VIZ = False
+_C.OUTPUT.SAVE_FISHEYE_VIZ = True
 
 # Output directory for visualizations and results
 _C.OUTPUT.SAVE_DIR = "results"
