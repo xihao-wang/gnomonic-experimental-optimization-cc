@@ -125,6 +125,9 @@ _C.OUTPUT.SAVE_COMPOSITE_VIZ = True
 # Save visualization of detections on original fisheye image (after backprojection)
 _C.OUTPUT.SAVE_FISHEYE_VIZ = True
 
+# Save lattice visualization for each backprojected bbox (shows distortion)
+_C.OUTPUT.SAVE_LATTICE_VIZ = True
+
 # Output directory for visualizations and results
 _C.OUTPUT.SAVE_DIR = "results"
 

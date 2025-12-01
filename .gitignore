@@ -40,6 +40,7 @@ env/
 
 # Data (too large to version control)
 datasets/data/
+datasets/all-datasets/
 results/
 *.npy
 *.h5
@@ -85,3 +86,4 @@ planning-data/
 
 # Irrelevant files
 INFRASTRUCTURE_SUMMARY.txt
+CLAUDE.md

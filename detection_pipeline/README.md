@@ -238,23 +238,20 @@ PROJECTION.TARGET_MP = 'auto'  # Efficient: each projection = comp_size / grid_d
 
 Backprojection maps detections from composite coordinates back to fisheye with radial alignment.
 
-**Method** (`build_radial_bbox`):
+**Method**:
 
-1. **Center**: Backproject bbox center from composite (x_comp, y_comp) → fisheye (x_fish, y_fish)
+1. **Map center**: Compute the center of each bbox on the composite image, then map it directly to the fisheye image.
 
-2. **Width**: Backproject left and right edges at center height, measure distance:
-   - Left: (x - w/2, y) → (x_left, y_left)
-   - Right: (x + w/2, y) → (x_right, y_right)
-   - width_fish = distance(left, right)
+2. **Transform dimensions**: Given a width and height (w, h) of a bbox on the composite image, compute (width_fish, height_fish) - the width and height in pixels on the fisheye that correspond to (w, h) on composite. This is a distance transformation operation:
+   - Backproject left and right edges at center height, measure distance between them → width_fish
+   - Backproject top and bottom edges at center width, measure distance between them → height_fish
 
-3. **Height**: Backproject top and bottom edges at center width, measure distance:
-   - Top: (x, y - h/2) → (x_top, y_top)
-   - Bottom: (x, y + h/2) → (x_bottom, y_bottom)
-   - height_fish = distance(top, bottom)
+3. **Radial alignment**: Establish the line that passes through the bbox center and the fisheye image center, then draw a bbox using (width_fish, height_fish) rotated to align with this radial direction. Height points radially (toward/away from fisheye center), width points tangentially (perpendicular).
 
-4. **Radial alignment**: Rotate bbox by angle from fisheye center to bbox center
-
-5. **Build corners**: Create 4 corners from center ± width/2, ± height/2, rotated
+**Implementation details**:
+- Width: (x - w/2, y) → (x_left, y_left), (x + w/2, y) → (x_right, y_right), width_fish = distance(left, right)
+- Height: (x, y - h/2) → (x_top, y_top), (x, y + h/2) → (x_bottom, y_bottom), height_fish = distance(top, bottom)
+- Corners: Built from center ± height_fish/2 (radial), ± width_fish/2 (tangential), rotated by angle from fisheye center to bbox center
 
 **Lattice visualization**: Aspect-ratio aware grid (width_samples = height_samples × aspect_ratio) backprojected to show distortion. One image per bbox: `fisheye_bbox_lattice_N.png`
 

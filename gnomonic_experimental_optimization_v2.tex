@@ -1,0 +1,415 @@
+\RequirePackage{fix-cm}
+
+
+
+\documentclass[twocolumn]{svjour3}          % twocolumn
+\usepackage[utf8]{inputenc}
+\usepackage{longtable,multirow,supertabular,afterpage}
+\usepackage{amssymb,amsbsy,textcomp,marvosym,caption,threeparttable}
+\usepackage{mathptmx, amsmath, amsfonts}
+\usepackage{bbm} 
+\usepackage{placeins}  % for \FloatBarrier
+\usepackage{nicefrac,xfrac}
+\usepackage{eurosym,fancyhdr,CJK,multicol,graphics,indentfirst,color,bm,upgreek,booktabs,graphicx,subfigure}
+\usepackage[mathcal]{euscript}
+\captionsetup[subfigure]{singlelinecheck=off,justification = raggedright}
+\usepackage{setspace}
+\usepackage{float}
+\usepackage{hyperref}% "hidelinks" removes the color used in bounding the links
+% Ensure PDF outline/bookmarks include subsections and open them by default
+\usepackage{bookmark}
+\hypersetup{bookmarksopen=true, bookmarksopenlevel=2}
+\bookmarksetup{numbered,open,depth=subparagraph}
+
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{listings}
+
+\usepackage[backend=bibtex,style = nature,sorting=none]{biblatex}
+\addbibresource{gnomonic_experimental_optimization_v2} 
+\renewcommand*{\bibfont}{\small}
+
+\newcommand\Lpix{\mathcal{L}_{\mathrm{pix}}}
+\newcommand\Lnorm{\mathcal{L}_{\mathrm{norm}}}
+
+\newcommand{\rot}[1]{\rotatebox[origin=c]{90}{#1}}
+\usepackage{makecell}
+\renewcommand\theadalign{bc}
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}} % This allows to centers texts of all colomns decleared with P instead of p
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}} % This allows to ragg left texts of all colomns 
+
+
+\begin{document}\sloppy %Sloppy enables constraint relaxation, which avoids text overflowing out of columns
+\title{\centering Experimental Optimization of Gnomonic Projection Configuration for Pedestrian Detection from Fisheye Images}
+
+\author{Yassir Zardoua}
+\maketitle
+\newpage
+
+\begin{abstract}
+	We present an optimized multi-projection strategy for person detection in fisheye images that improves accuracy with minimal model rework.
+\end{abstract}
+
+\section{Introduction}
+...
+\section{Literature Review}
+\label{sec_literature}
+\noindent
+The problem of object detection in fisheye images has attracted significant research attention due to the growing deployment of omnidirectional cameras in autonomous systems. Approaches can be broadly categorized into direct adaptation methods that modify neural network architectures, and indirect projection methods that transform images to standard perspective views.
+
+Direct neural network adaptation approaches attempt to handle fisheye distortions within the model architecture. Wei et al.~\cite{wei2023dcpb} deform convolutional kernels to align the receptive field with the radially variant warping nature of fisheye images. They rely on methods such as the Poincaré ball, Möbius operations, hyperbolic GCNs (Graph Convolutional Networks), and geodesic distances to capture multiple deformation criteria, including radial distance from the fisheye center, angular position, and local feature content. The last criterion makes this approach input-dependent, thus requiring compute-intensive kernel deformation at each forward pass.
+
+Yang et al.~\cite{yang2024improved} proposed PGDS-YOLOv8s, an enhanced YOLOv8s baseline, with various architectural adaptations. They reported notable improvements in their ablation study while maintaining an excellent FPS (250 vs. 286 for the baseline). However, we believe that improvements made in~\cite{yang2024improved} are general-purpose rather than fisheye-specific, as all of their adaptations rely on integration of various plug-and-play technologies, namely Ghost modules~\cite{ghostnet}, Squeeze-and-Excitation (SE) blocks~\cite{squeeze_excitation_se}, and Spatial Pyramid Pooling Fast (SPPF)~\cite{yolov5_by_Ultralytics_2020}. We note that~\cite{yang2024improved} process 360° equirectangular images rather than fisheye counterparts, which has a different type of distortion. 
+
+Unlike~\cite{yang2024improved}, earlier works tackling omnidirectional distortions, such as~\cite{yang2018object}, criticized the direct usage of axis-aligned bounding boxes\footnote{Axis-aligned bounding boxes are rectangles whose edges remain parallel to the image axes (x and y), as in the BBoxes produced by early YOLO models.} (BBoxes) on distorted images, crafting instead bending BBoxes that more tightly enclose detected objects. In top-view person detection, Duan et al.~\cite{duan2020rapid} made this explicit by extending a YOLOv3-style head to regress rotated BBoxes with an additional angle term $\hat{b_{\theta}}$ and a modified loss handling the periodic nature of rotated BBoxes. Haggui et al.~\cite{haggui2024centroid} and Yuan et al.~\cite{yuan2023rotated} later built on that recipe, with~\cite{haggui2024centroid} proposing a lightweight centroid-based tracker to enhance current detections, and~\cite{yuan2023rotated} leveraging that receipe through training on DOTA~\cite{xia2018dota}, which lacks fisheye images but includes valuable annotations of rotated BBoxes from aerial imagery, thus aiding the regression of rotated BBoxes. Yuan et al.~\cite{yuan2023rotated} also adopted the DyHead (Dynamic Head) block from~\cite{dai2021dynamic}, inserted between the backbone and the neck of RTMDet~\cite{rtmdet}. While DyHead different types of attention, i.e., scale, size, and task attention, its principle seems similar to~\cite{yang2024improved}: a general-purpose architectural enhancement not tailored to the specific characteristics of fisheye images.
+
+Unlike the angle-regression adaptation in~\cite{duan2020rapid, yuan2023rotated, haggui2024centroid, dai2021dynamic}, Yang et al.~\cite{yang2023large} argue that such regression is actually redundant and can even lead to unstable training, as the same object (person) can fit into multiple \textit{valid} BBoxes with different orientations. Therefore, they introduced radius-aligned BBoxes, which not only standardizes BBox definition but also removes the need of angle regression, thus leading to simpler model and more stable training. Additionally, the authors of~\cite{yang2023large} proposed a dual-loss leveraging the rotation equivariance property of top-view fisheye images, which is grounded on the observation that rotation of an image (from the fisheye center) produces an image within the realm of what the model expects at test time, with the possibility of precisely computing GT (Ground Truth) BBoxes corresponding to rotated images. This property doesn't apply when the optical axis is horizontal (or near-horizontal), as we do not expect, for instance, to detect people upside down. Accordingly, the first and second term of the dual-loss correspond to predictions on two images, with one being the rotated version of the other. Authors experimentally show that this is not a simple data augmentation, but rather a methodology leveraging \textit{rotation equivariance} to encourage the model into producing \textit{rotation invariant features}.
+
+A recent arXiv paper~\cite{wakai2025panoramic} converted the fisheye image to an equirectangular version, and then proposed a panoramic distortion-aware tokenization (PDAT) method, which is adapted from the \textit{significance map} tokenization proposed in SG-Former~\cite{sg-former}. While the latter uses the significance map to increase the tokenization resolution at any feature map location, the PDAT adapts this process only within the latitude range of $\theta > 70^\circ$, i.e., toward the top of the panorama, which is justified by the observation that pedestrians' height linearly decreases after the 70° latitude threshold. Wakai et al.~\cite{wakai2025panoramic} leverage this linearity in their PDAT by establishing a non-uniform tiling strategy, thus producing smaller tiles in the uppermost regions to better fit pedestrian height. The tiles below the 70° latitude threshold are kept unchanged since there is no significant height change of BBoxes. While the method in~\cite{wakai2025panoramic} reports promising accuracy metrics, the absence of reported hardware and latency-related tests may hinder its direct integration within embedded drone systems.
+
+Multi-view projection approach is a simpler way to adapt existing resources, namely existing detectors, with minimal labor. Chiang et al.~\cite{chiang2014human} pioneered an algorithm within this approach, fixing a narrow window (rectangle) while aligning its major axis with an arbitrary radial axis (usually the upward-pointing axis), then applying the ubiquitous HOG-SVM detector of that time. The fisheye image is then iteratively rotated while keeping the window at the same arbitrary position until the entire FOV is covered. Following this principle, Li et al.~\cite{li2019supervised} increased the window width as they used a more advanced detector, applying YOLOv3 on rectangular a fixed window covering a specific fisheye part while rotating it with 15° increments. They aimed at producing radial-aligned BBoxes to accommodate the labels in their newly proposed HABBOF, thus projecting the detected BBoxes back onto the original fisheye image, and eventually forcing all BBox orientations to align with fisheye radius. An obvious limitation in~\cite{li2019supervised} is the necessity of rotating the fisheye image 24 times, thus requiring YOLOv3 to process 24 windows per frame. The authors mitigate this limitation through an activity-aware mechanism, skipping empty windows and processing pedestrian regions only. However, the computational issue will persist in crowded scenes or in images where few pedestrians are scattered at a wide variety of angles, and the proposed activity-aware mechanism is effective in static indoor scenes only.
+
+In parallel, Tamura et al.~\cite{masato_wacv2019} focused on creating a rotation-aware training pipeline, thus avoiding the need of processing multiple windows per frame. Their baseline YOLOv2 keeps the same prediction head, while computing the BBox angle as a post-detection step through mathematical alignment with the radial axis. They replaced NMS of original YOLOv2 with their Bounding Box Refinement (BBR): rotated pedestrians lead to multiple BBox with different sizes and low IOU of a given pedestrian, which NMS fails to merge. BBR avoids IOU and relies instead on clustering centers with mean-shift, eventually computing the final center and size (width and height) via a confidence-weighted average. This process may be delicate in crowded scenes with nearby centroids, potentially producing many false negatives (FN). Nevertheless, BBR is shown experimentally to be more effective than the original NMS of YOLOv2. 
+
+While Tamura et.~\cite{masato_wacv2019} avoided the use of multiple windows for computational considerations, Chiang et al~\cite{chiang2021efficient} later showed the possibility of using 8 windows without affecting the baseline speed while achieving competitive or improved performance relative to Tamura et al.~\cite{masato_wacv2019} on several benchmarks. The fixed window and fisheye rotation adopted by Tamura, although aligns BBoxes, crops the fisheye with its natural radial distortions, whereas Chiang et al.~\cite{chiang2021efficient} produce the 8 windows through gnomonic projections with a fixed horizontal and vertical FOV, re-arranging them eventually into one single image, referred to as \textit{composite image}, by stacking them into two rows and four columns, thus creating a 2×4 composite image input to the model. Back-projection of detected BBoxes on gnomonic views back onto fisheye doesn't produce rectangular BBoxes as in prior works, which is why a novel regression-based BBox mapping is introduced. This regression is conceptually similar to~\cite{wakai2025panoramic}, where the linear decrease of persons' height on equirectangular panorama above 70° latitude is exploited; in contrast, Chiang et al~\cite{chiang2021efficient} pre-computed a large set of \textit{target} BBoxes of different sizes decreases systematically with the radial distance from the fisheye center, eventually selecting fixed set of \textit{target} BBoxes for each \textit{reference} box detected on the composite image. The target BBoxes are selected based on IOU, and the final fisheye BBox is computed using an IOU-based weighting process.
+
+\section{Literature Summary and Research Motivation}
+In summary, the works we reviewed herein adopt various approaches and strategies, including architectural modifications accounting for fisheye or equirectangular distortions~\cite{wei2023dcpb, wakai2025panoramic} (e.g., modified tokenizers and convolutional kernels), extension of perspective detectors to regress rotated BBoxes with rotation-aware loss~\cite{duan2020rapid, yuan2023rotated, haggui2024centroid}, seamless merging of various plug-and-play modules into YOLO variants~\cite{yang2024improved}, alignment of BBoxes with the fisheye radial axis~\cite{li2019supervised, masato_wacv2019}, rotation-aware training pipelines~\cite{masato_wacv2019, yang2023large}, and the processing of sub-windows extracted through cropping or gnomonic projection~\cite{chiang2014human, chiang2021efficient}. 
+
+If we consider the detection robustness and computational constraints as key design factors for drone-based systems, we can safely conclude that a single forward-pass of a single image stacking N projections, as adopted in~\cite{chiang2021efficient}, is a promising approach. Therefore, our research aims at performing further study within this framework. Specifically, we noticed that the literature lacks a study to optimize the projection configuration. Looking at the projection configuration reported in~\cite{chiang2021efficient}, we observe gaps left uncovered by the projection windows within the fisheye image, which are the regions between the dotted red and green boundaries in Figure~\ref{fig_chiang_projection}. Additionally, in the same figure we highlight in transparent blue that the projection windows produce a seemingly unnecessary redundancy at the fisheye center. This imbalance in the coverage of projection windows of the fisheye image is not the only motivation towards researching a better configuration. 
+
+\begin{figure}[!h]
+	\centering
+	\includegraphics[width=1\columnwidth]{img/gaps-projection.jpg}
+	\caption{The area between dotted red and green boundaries is disregarded, while the blue area is 8-times redundant. Original figure is taken from~\cite{chiang2021efficient}, then adapted using red, green, and blue colors.}
+	\label{fig_chiang_projection}
+\end{figure}
+As we discussed earlier in Section~\ref{sec_literature}, the pixels disregarded in Figure~\ref{fig_chiang_projection} correspond to critical regions that motivated the development of, for instance, tailored adaptive tokenization method to handle the small pedestrians appearing therein~\cite{wakai2025panoramic}. Moreover, Wakai et al.~\cite{wakai2025panoramic} report that ``the range of incident angles from 80◦ to 90◦ dominated 75\% of the number of bounding boxes'', emphasizing the importance of effective coverage of such circumferential regions to avoid missing detections.
+
+We ground our study of finding a better projection configuration on the hypothesis described in Section~\ref{sec_hypothesis}.
+
+
+\section{Research Hypothesis}
+\label{sec_hypothesis}
+Our fundamental hypothesis is that a moderately wider FOV projected using the gnomonic method will maximize pedestrian detection performance by (1) avoiding uncovered fisheye areas and (2) reducing pedestrian truncation at viewport boundaries. There is reasonable evidence in support of this hypothesis. For instance, the gnomonic method represents the ideal projection model of pinhole cameras~\cite{pegoraro2016handbook, billings2020silhonet}, which are used to collect most, if not all, of the images used to train YOLO detectors. 
+
+There is a slight nuance between such pinhole cameras and the gnomonic projection we aim to use: a larger FOV, which is not typical of commercial pinhole cameras. We assume that moderately widening the FOV, compared to previous work~\cite{chiang2021efficient}, will yield an acceptable trade-off. This is explained by the fact that such widening introduces radial stretching\footnote{The farther from the viewport center, the greater the stretching of depicted objects}, similar in nature to the perspective and stretching augmentations used for YOLO training. While the stretching effects in gnomonic viewports are not constant, as in YOLO augmentations, the intra-stretching within the pixels depicting an individual person remains almost constant, since each object occupies only a small fraction of the viewport when using a large FOV, thus justifying our assumption. We show further evidence in Figure~\ref{fig_distortion_comparison}, which depicts stretching effects due to a gnomonic projection and the augmentation distortion obtained from the Ultralytics API. We can observe no significant difference between the extreme gnomonic stretching in Figure~\ref{fig_gnomonic} and that of, for instance, shear transformation shown in Figure~\ref{fig_shear}.
+
+While such similarities between gnomonic artifacts and data augmentation suggest that enlarging gnomonic FOV is not harmful, we believe that a reasonable enlargement is actually beneficial, which is due to the fact that larger FOV covers the fisheye image with fewer viewports, and fewer viewports means fewer boundaries truncating pedestrians. The literature shows that object occlusion, which leads to truncation, is a serious issue that pushed emergence of a specific literature area~\cite{ruan2023review, ryu2021detection}. Therefore, using fewer projections with a larger FOV will obviously mitigate this issue. 
+
+Given this hypothesis, the projection configuration we adopted is driven by the principle of investigating an optimal and large FOV to create gnomonic viewports for YOLO detector. 
+
+\begin{figure*}[!ht]
+	\centering
+	\subfigure[Original image]{
+		\includegraphics[width=0.22\textwidth]{img/fig_before_distortion.png}
+		\label{fig_original}
+	}
+	\subfigure[Gnomonic projection]{
+		\includegraphics[width=0.22\textwidth]{img/fig_gnomonic_strech.png}
+		\label{fig_gnomonic}
+	}
+	\subfigure[Shear augmentation]{
+		\includegraphics[width=0.22\textwidth]{img/fig_shear_ultralytics.png}
+		\label{fig_shear}
+	}
+	\subfigure[Stretch augmentation]{
+		\includegraphics[width=0.22\textwidth]{img/fig_stretch_ultralytics.png}
+		\label{fig_stretch}
+	}
+	\caption{Comparison of image distortions on a pedestrian (zoomed for better clarity): (a) Original image generated with an ideal FOV and object centering for an ideal non-stretched object (b) Distortion due to gnomonic projection. (c) Image augmented with a shear transformation. (d) Image augmented with a stretch transformation.}
+	\label{fig_distortion_comparison}
+\end{figure*}
+
+\section{Methodology}
+% an introductory paragraph will be put here later, after finishing the entire section. Make sure to add a note in this introductory paragraph that no training is required for our methodology to work.
+
+Our methodology builds upon the equidistant (fisheye) projection model, which maps 3D directions to 2D image coordinates through the relationship:
+
+\begin{equation}
+	r = f \cdot \theta
+	\label{eq:fisheye_model}
+\end{equation}
+
+where $r$ is the radial distance from the image center, $f$ is the focal length, and $\theta$ is the incident angle of the 3D direction from the optical axis. This model underpins the geometric transformations between fisheye and perspective coordinate systems described in the current section.
+
+\subsection{Projection Configuration Selection}
+\label{sec:config_selection}
+
+A critical challenge in multi-projection fisheye processing is selecting appropriate configuration parameters: number of projections $N$, field-of-view angle $\alpha$, and viewing direction arrangement (longitudes $\{\lambda_i\}$ and latitude $\phi$). We conjecture that recent YOLO versions, such as YOLOv8, unlike the older models used in Chiang et al.~\cite{chiang2021efficient}, exhibit improved tolerance to gnomonic distortion, thereby enabling a safer increase of the projection field of view. This, in turn, reduces the required number of projections and yields faster execution.
+
+
+\subsubsection{Design Rationale and Constraints}
+
+Our configuration selection is motivated by computational efficiency for embedded deployment. The latest multi-view approach~\cite{chiang2021efficient} employs 8 projections with a narrow field of view (60°). Through an initial visual analysis of the projection configuration in~\cite{chiang2021efficient}, we conclude that it can be improved in two aspects: increasing coverage and reducing redundancy. Figure~\ref{fig_chiang_projection} shows large gaps left uncovered by the projection windows (in yellow) within the fisheye image (the regions between the dotted red and green boundaries). Additionally, as highlighted in transparent blue, the projection windows introduce unnecessary redundancy near the fisheye center.
+
+\begin{figure}[!h]
+	\centering
+	\includegraphics[width=1\columnwidth]{img/gaps-projection.jpg}
+	\caption{The 8-projection windows are the yellow rectangles. The area between the dotted red and green boundaries is disregarded, while the blue area is repeated across all 8 projections. The original figure is taken from~\cite{chiang2021efficient} and adapted using red, green, and blue overlays.}
+	\label{fig_chiang_projection}
+\end{figure}
+
+We hypothesize that using fewer projections with an enlarged field of view can maintain complete coverage while reducing projection-generation overhead (fewer gnomonic transformations), provided that projection boundaries overlap sufficiently to support robust multi-view fusion.
+
+
+For $N$ projections uniformly distributed at longitudes $\lambda_i = \frac{360^\circ}{N} \cdot i$ with identical latitude $\phi$ and field-of-view $\alpha$, complete coverage requires that adjacent projections exhibit spatial overlap. Practical constraints include: (1) $N$ should be even for symmetric arrangement, (2) $\alpha$ should remain below ~120° to limit edge distortion, and (3) latitude $\phi$ affects viewing angle and coverage characteristics.
+
+\subsubsection{Experimental Configuration Exploration}
+
+We empirically evaluate multiple projection configurations by testing discrete parameter combinations and measuring detection performance on validation subsets from PIROPO and CEPDOF datasets. The explored configurations include:
+
+\begin{itemize}
+	\item Number of projections: $N \in \{2, 4, 6, 8\}$ (even values for symmetry)
+	\item Field-of-view: $\alpha \in \{60^\circ, 80^\circ, 90^\circ, 106^\circ, 120^\circ\}$
+	\item Latitude: $\phi \in \{15^\circ, 30^\circ, 37^\circ, 45^\circ\}$ (excluding $0^\circ$ as it provides no azimuthal coverage)
+\end{itemize}
+
+Our fisheye images capture the bottom hemisphere only (corresponding to latitudes from $\phi=0^\circ$ at the nadir/south pole to $\phi=90^\circ$ at the horizon). This imposes important constraints on latitude selection. At $\phi=0^\circ$, varying longitude provides no additional coverage, as all projections view the same nadir point from different rotational angles. Useful coverage requires $\phi > 0^\circ$. Furthermore, for a projection with field-of-view $\alpha$ positioned at latitude $\phi$, the vertical angular extent spans approximately from $(\phi - \alpha/2)$ to $(\phi + \alpha/2)$. To maximize hemisphere coverage without intrusion into the upper hemisphere, the relationship $\phi + \alpha/2 \leq 90^\circ$ should be satisfied. For instance, $\alpha=90^\circ$ pairs naturally with $\phi=45^\circ$ to cover the full hemisphere range ($0^\circ$ to $90^\circ$), whereas our selected $\alpha=106^\circ$ requires $\phi=37^\circ$ to reach exactly to the horizon (since $37^\circ + 106^\circ/2 = 90^\circ$). Lower latitude values introduce more overlap near the nadir but enable wider fields of view. These geometric relationships guided our parameter exploration, with latitude values adjusted to balance hemisphere coverage completeness against projection redundancy.
+
+For each candidate configuration $(N, \alpha, \phi)$, we generate perspective projections, run YOLOv8 detection, perform back-projection and fusion, then measure F1-score on validation sequences. Configurations yielding incomplete fisheye coverage (visible gaps between projection boundaries) are eliminated. Among configurations achieving complete coverage, we prioritize those with fewer projections while maintaining detection accuracy comparable to or exceeding the 8-projection baseline. Figure~\ref{fig:coverage_analysis} summarizes the empirical exploration results, showing detection performance and coverage completeness across different parameter combinations.
+
+\begin{figure}[!h]
+	\centering
+	%\includegraphics[width=0.85\columnwidth]{img/coverage_analysis.png}
+	\caption{Empirical exploration results showing F1-score and coverage completeness for different $(N, \alpha)$ combinations at $\phi=37^\circ$. Configurations achieving complete coverage ($\geq$99\%) are highlighted. The selected configuration (N=4, $\alpha$=106°, marked with star) balances detection accuracy with computational efficiency.}
+	\label{fig:coverage_analysis}
+\end{figure}
+
+\subsubsection{Selected Configuration}
+
+Based on empirical evaluation, we select $N=4$ projections at $\alpha \approx 106^\circ$ with $\phi = 37^\circ$. We employ symmetric field-of-view (106° for both horizontal and vertical dimensions), unlike the baseline configuration~\cite{chiang2021efficient} which uses asymmetric FOV (48° horizontal, 96° vertical). Symmetric FOV simplifies projection geometry while ensuring uniform angular resolution in both dimensions. The latitude choice is geometrically matched to the field-of-view: $\phi + \alpha/2 = 37^\circ + 53^\circ = 90^\circ$, ensuring the vertical extent reaches exactly to the horizon without exceeding into the upper hemisphere. This configuration achieves complete fisheye coverage with adequate boundary overlap between adjacent views while minimizing projection count. The four projections are positioned at orthogonal cardinal longitudes ($\lambda \in \{0^\circ, 90^\circ, 180^\circ, 270^\circ\}$) to ensure balanced azimuthal distribution, as visualized in Figure~\ref{fig:optimal_configuration}.
+
+Compared to conventional 8-projection approaches~\cite{chiang2021efficient}, this configuration reduces projection generation overhead by 50\% (4 gnomonic transformations instead of 8). In separate processing mode, it reduces detector inference passes from 8 to 4. In composite mode where all projections are assembled into a single image, the 4-projection configuration yields smaller composite images (2×2 grid versus larger arrangements for 8 projections), reducing memory footprint and image resizing overhead. 
+
+\begin{figure}[!h]
+	\centering
+	%\includegraphics[width=0.85\columnwidth]{img/optimal_configuration.png}
+	\caption{Visualization of the selected 4-projection configuration overlaid on a fisheye image. Each colored region represents the coverage area of one perspective view at 106° FOV positioned at $\phi=37^\circ$ latitude. Adjacent projections exhibit sufficient overlap to ensure robust multi-view fusion without excessive redundancy.}
+	\label{fig:optimal_configuration}
+\end{figure}
+
+\subsection{Gnomonic projection and composite image creation}
+\label{sec:gnomonic_projection}
+
+Our approach generates perspective views from a fisheye image through virtual camera projections positioned at specified viewing directions. Each perspective view is defined by three parameters: viewing direction (longitude $\lambda$ and latitude $\phi$ in spherical coordinates), field-of-view (FOV) angle $\alpha$, and output resolution $W_{\text{out}} \times H_{\text{out}}$ in pixels.
+
+The transformation from fisheye to perspective coordinates proceeds through three stages:
+
+\subsubsection{Rotation Matrix Computation}
+\label{sec:rotation_matrix}
+
+The virtual camera's viewing orientation is expressed as a rotation matrix $R = [\mathbf{R} \; | \; \mathbf{U} \; | \; \mathbf{F}]$ constructed from orthonormal basis vectors:
+
+\begin{equation}
+	\mathbf{F} = (\sin\phi\cos\lambda, \sin\phi\sin\lambda, -\cos\phi)
+	\label{eq:forward_vector}
+\end{equation}
+
+\begin{equation}
+	\mathbf{R} = \frac{\mathbf{F} \times \mathbf{U}_{\text{world}}}{||\mathbf{F} \times \mathbf{U}_{\text{world}}||}, \quad \mathbf{U} = \frac{\mathbf{R} \times \mathbf{F}}{||\mathbf{R} \times \mathbf{F}||}
+	\label{eq:basis_vectors}
+\end{equation}
+
+where $\mathbf{U}_{\text{world}} = (0, 0, 1)$ is the world up vector. The forward vector $\mathbf{F}$ defines the viewing direction, while the orthonormal basis ensures consistent coordinate frame orientation across all projections.
+
+\subsubsection{Perspective Projection}
+\label{sec:perspective_projection}
+
+For each output pixel $(u, v)$ in the perspective view, local camera coordinates\footnote{Local camera coordinates refer to the 3D direction vectors expressed relative to the virtual camera's local reference frame. They differ from the final digital perspective image (2D pixel grid) in that they represent normalized directions rather than image intensities. These directions are later sampled from the fisheye image to obtain actual pixel values.} are computed as:
+
+\begin{equation}
+	\begin{aligned}
+		x_{\text{local}} &= \frac{u - W_{\text{out}}/2}{f} \\
+		y_{\text{local}} &= \frac{H_{\text{out}}/2 - v}{f} \\
+		z_{\text{local}} &= 1
+	\end{aligned}
+	\label{eq:perspective_coords}
+\end{equation}
+
+where $f = \frac{W_{\text{out}}/2}{\tan(\alpha/2)}$ is the focal length derived from the desired field-of-view $\alpha$. These local coordinates represent the direction from the virtual camera center through pixel $(u, v)$.
+
+\subsubsection{Inverse Mapping to Fisheye Space}
+\label{sec:inverse_mapping}
+
+The local camera directions are rotated into world coordinates. Since the fisheye image is stored as a 2D pixel array on the computer, we employ a normalization step to convert 3D directions onto the unit sphere, establishing a bijection between 2D pixel coordinates and 3D surface locations. This normalization shrinks the length of direction vectors to unit magnitude, ensuring that they point exactly to locations on the unit sphere, from which we can later retrieve RGB values from the stored fisheye image. The direction vectors are computed as:
+
+\begin{equation}
+	\mathbf{d}_{\text{world}} = R^T \cdot \frac{(x_{\text{local}}, y_{\text{local}}, z_{\text{local}})}{||(x_{\text{local}}, y_{\text{local}}, z_{\text{local}})||}
+	\label{eq:world_dir}
+\end{equation}
+
+Spherical angles (the polar angle $\theta'$ and azimuthal angle $\psi$ describing a point's location on the 3D sphere) are extracted from the unit direction vector as:
+
+\begin{equation}
+	\theta' = \arccos(-d_{\text{world},z}), \quad \psi = \arctan2(d_{\text{world},y}, d_{\text{world},x})
+	\label{eq:spherical_angles}
+\end{equation}
+
+Following the equidistant fisheye projection model (Eq.~\ref{eq:fisheye_model}), these angles map to fisheye image coordinates:
+
+\begin{align}
+	r_{\text{px}} &= \frac{\theta'}{\pi/2} \cdot R_{\text{fisheye}} \\
+	u_{\text{fish}} &= u_c + r_{\text{px}} \cos\psi \\
+	v_{\text{fish}} &= v_c + r_{\text{px}} \sin\psi
+	\label{eq:fisheye_mapping}
+\end{align}
+
+where $R_{\text{fisheye}}$ is the fisheye image radius and $(u_c, v_c)$ is the fisheye image center\footnote{Ideally, the image center should coincide with the vignette center (the center of the dark region boundary common to fisheye lenses) rather than the geometric image center, as vignette center better reflects the camera's optical properties. In practice, camera calibration results may yield slight offsets between these centers; practitioners should use the vignette center when available for improved geometric accuracy.}.
+
+These transformations are precomputed once during initialization as projection matrices $m_x$ and $m_y$ that establish point-to-point correspondence between perspective and fisheye domains. For each pixel coordinate $(u, v)$ in the perspective view, these matrices directly provide the corresponding fisheye coordinates:
+
+\begin{equation}
+	I_{\text{persp}}(u,v) = I_{\text{fisheye}}(m_x(u,v), m_y(u,v))
+	\label{eq:projection_matrices}
+\end{equation}
+
+\noindent
+This mapping enables efficient perspective view extraction with sub-pixel accuracy\footnote{In practice, the matrices $m_x$ and $m_y$ typically yield non-integer (floating-point) fisheye coordinates, as the geometric transformation generally does not map perspective pixels to exact integer positions in the fisheye image. Since digital images are discrete arrays, we employ bilinear interpolation to estimate pixel intensities at non-integer coordinates, which provides smooth transitions between neighboring pixels and better preserves image quality during resampling.}.
+
+\subsubsection{Composite Image Creation}
+\label{sec:composite_creation}
+
+Here, specify the grid layout, which may be different for the same number of gnomonic projections (e.g., 2×4 and 4×2 grids both contain 8 projected images)
+
+\subsection{Altitude-Agnostic Geometric Backprojection}
+
+Describe the importance of altitude-agnostic configuration here...
+
+\subsubsection{Back-Projection from Single Perspective Views}
+\label{sec:backproj_single}
+
+For each bounding box detection represented by its axis-aligned bounds $(x_1, y_1, x_2, y_2)$ (top-left and bottom-right corners in pixel coordinates) in a perspective view, we perform geometric backprojection through three sequential operations: center mapping, dimension transformation, and radial alignment.
+
+\paragraph{Center Mapping}
+
+The bounding box center $(x_c, y_c)$ in perspective coordinates, where $x_c = (x_1 + x_2)/2$ and $y_c = (y_1 + y_2)/2$, is directly mapped to fisheye coordinates using the precomputed projection matrices (Eq.~\ref{eq:projection_matrices}):
+
+\begin{equation}
+    (u_{\text{fish},c}, v_{\text{fish},c}) = (m_x(x_c, y_c), m_y(x_c, y_c))
+    \label{eq:center_backproj}
+\end{equation}
+
+\paragraph{Dimension Transformation}
+
+%backprojection justification here
+The gnomonic-to-fisheye transformation exhibits spatially-varying distortion: the relationship between perspective and fisheye distances depends on location within the image. Consequently, a bounding box with width $w$ pixels on the composite does not correspond to a uniform fisheye width—the mapping scales differently at different positions. To preserve tight object fit when transforming from composite to fisheye, we employ a geometric distance measurement approach rather than direct pixel dimension transfer.
+
+For width, we backproject the left and right edge locations at the bbox's vertical centerline, then measure the Euclidean distance between them in fisheye space. This captures the local scaling factor specific to this bbox's horizontal extent and vertical position. Similarly, for height, we backproject the top and bottom edge locations at the bbox's horizontal centerline and measure their fisheye-space separation. By sampling the transformation at the actual edge locations (rather than applying a global scale factor), we ensure that if a bbox tightly encloses a pedestrian on the composite image, the backprojected dimensions will maintain that tight fit on the fisheye image.
+
+\textit{Width transformation:} We backproject the left and right edge midpoints at the bbox's vertical center:
+\begin{equation}
+    \begin{aligned}
+    (u_{\text{left}}, v_{\text{left}}) &= (m_x(x_1, y_c), m_y(x_1, y_c)) \\
+    (u_{\text{right}}, v_{\text{right}}) &= (m_x(x_2, y_c), m_y(x_2, y_c))
+    \end{aligned}
+    \label{eq:width_backproj}
+\end{equation}
+
+The fisheye-space width is the Euclidean distance between these backprojected edge points:
+\begin{equation}
+    w_{\text{fish}} = \|(u_{\text{right}}, v_{\text{right}}) - (u_{\text{left}}, v_{\text{left}})\|_2
+    \label{eq:width_fish}
+\end{equation}
+
+\textit{Height transformation:} Similarly, we backproject the top and bottom edge midpoints at the bbox's horizontal center:
+\begin{equation}
+    \begin{aligned}
+    (u_{\text{top}}, v_{\text{top}}) &= (m_x(x_c, y_1), m_y(x_c, y_1)) \\
+    (u_{\text{bottom}}, v_{\text{bottom}}) &= (m_x(x_c, y_2), m_y(x_c, y_2))
+    \end{aligned}
+    \label{eq:height_backproj}
+\end{equation}
+
+The fisheye-space height is:
+\begin{equation}
+    h_{\text{fish}} = \|(u_{\text{bottom}}, v_{\text{bottom}}) - (u_{\text{top}}, v_{\text{top}})\|_2
+    \label{eq:height_fish}
+\end{equation}
+
+\paragraph{Radial Alignment}
+
+To ensure compatibility with top-view oriented ground-truth annotations, we construct a rotated rectangle with dimensions $(w_{\text{fish}}, h_{\text{fish}})$ centered at $(u_{\text{fish},c}, v_{\text{fish},c})$ and oriented radially toward the fisheye center. The rotation angle $\theta_{\text{radial}}$ is computed as:
+
+\begin{equation}
+    \theta_{\text{radial}} = \arctan2(v_{\text{fish},c} - v_{\text{center}}, u_{\text{fish},c} - u_{\text{center}})
+    \label{eq:radial_angle}
+\end{equation}
+
+where $(u_{\text{center}}, v_{\text{center}})$ represents the fisheye image center. The four corners of the radially-aligned bounding box are constructed by rotating a rectangle of dimensions $(w_{\text{fish}}, h_{\text{fish}})$ around the backprojected center, with the height dimension oriented radially (pointing toward/away from the fisheye center) and the width dimension oriented tangentially (perpendicular to the radial direction).
+
+This backprojection strategy avoids the computational overhead of dense point sampling while accurately preserving the geometric relationship between perspective detections and their fisheye-space representations.
+
+\subsubsection{Back-Projection from Composite Images}
+\label{sec:backproj_composite}
+
+When detections arise from composite images, a multi-stage coordinate transformation is required before back-projection to fisheye space. The composite image is tiled from multiple perspective views and resized for batch processing; therefore, detections must be transformed back through this pipeline to recover the original fisheye coordinates.
+
+\noindent
+\textbf{Composite Image Structure.}
+In the 2×2 composite arrangement, four perspective views are tiled into a single composite image with total dimensions $2W_{\text{out}} \times 2H_{\text{out}}$, where $W_{\text{out}} \times H_{\text{out}}$ represents the dimensions of each individual perspective view. This composite image is then resized to the YOLOv8 input dimensions (e.g., 640×640 pixels), enabling all four perspective sub-views to be processed in a single forward inference pass through the detector. Each perspective view $P_i$ occupies a rectangular region within the composite image. Concretely: $P_1$ occupies $(0, 0, W_{\text{out}}, H_{\text{out}})$ (top-left), $P_2$ occupies $(W_{\text{out}}, 0, 2W_{\text{out}}, H_{\text{out}})$ (top-right), $P_3$ occupies $(0, H_{\text{out}}, W_{\text{out}}, 2H_{\text{out}})$ (bottom-left), and $P_4$ occupies $(W_{\text{out}}, H_{\text{out}}, 2W_{\text{out}}, 2H_{\text{out}})$ (bottom-right).
+
+\noindent
+\textbf{Coordinate Transformation Pipeline.}
+YOLOv8 reports detections in the resized 640×640 image space. To recover fisheye coordinates, we apply three sequential transformations:
+
+\noindent
+\textit{Step 1: Scale from YOLOv8 space to original composite dimensions.} YOLOv8 detections $(x_{\text{yolo}}, y_{\text{yolo}}, w_{\text{yolo}}, h_{\text{yolo}})$ are reported in 640×640 coordinates. We scale these back to the original composite image dimensions:
+
+\begin{equation}
+	x_{\text{comp}} = x_{\text{yolo}} \cdot \frac{2W_{\text{out}}}{640}, \quad y_{\text{comp}} = y_{\text{yolo}} \cdot \frac{2H_{\text{out}}}{640}
+	\label{eq:yolo_to_composite}
+\end{equation}
+
+where $(x_{\text{comp}}, y_{\text{comp}})$ are the detection coordinates in the original composite image space.
+
+\noindent
+\textit{Step 2: Identify the source perspective view and map to view-local coordinates.} We determine which tile region (top-left, top-right, bottom-left, or bottom-right) the detection overlaps. Given the detection's bounding box corners $(x_{\text{comp},1}, y_{\text{comp},1})$ and $(x_{\text{comp},2}, y_{\text{comp},2})$, we identify the tile's top-left corner $(x_{\text{tile}}, y_{\text{tile}})$ and transform to perspective-view-local coordinates:
+
+\begin{equation}
+	x_{\text{persp}} = x_{\text{comp}} - x_{\text{tile}}, \quad y_{\text{persp}} = y_{\text{comp}} - y_{\text{tile}}
+	\label{eq:composite_to_persp}
+\end{equation}
+
+where $(x_{\text{persp}}, y_{\text{persp}})$ are now in the coordinate system of the individual perspective view, with ranges $[0, W_{\text{out}}] \times [0, H_{\text{out}}]$.
+
+\noindent
+\textit{Step 3: Back-project from perspective view coordinates to fisheye coordinates.} Once in perspective-view coordinates, we apply the identical back-projection procedure as Section~\ref{sec:backproj_single}: dense sampling of the bounding box via a $10 \times 10$ lattice, reuse of the precomputed projection matrices $m_x$ and $m_y$ to transform each sample to fisheye coordinates, accumulation into a point cloud $\mathcal{P}$, and fitting of a minimum-area oriented rectangle. The point cloud is constructed in fisheye image space (not composite space), recovering the original geometry.
+
+\subsection{Multi-View Detection Fusion}
+
+After back-projection to fisheye coordinates, detections from multiple views must be fused to eliminate duplicates while preserving legitimate multiple-view observations. We employ Gaussian Soft-NMS~\cite{seidel2019improved}, which applies progressive score reduction based on intersection-over-union rather than binary elimination. This approach is particularly well-suited for our multi-view pipeline, as objects frequently appear across projection boundaries with slight variations due to geometric transformation discretization and fisheye distortion characteristics. The progressive penalty mechanism preserves detections that might be erroneously suppressed by hard NMS while handling the three characteristic fusion challenges: boundary overlaps between adjacent projections, partial occlusions visible in different views, and scale variations arising from perspective foreshortening across viewing angles. Detections with final scores below a threshold of 0.3 are discarded.
+
+
+\section{Experimental Setup}
+
+\subsection{Dataset Specifications}
+
+We conduct comprehensive evaluation on two benchmark datasets specifically designed for fisheye person detection, providing diverse scenarios and annotation formats.
+
+\subsection{Implementation Details}
+\subsubsection{Hardware and Software Configuration}
+
+\subsubsection{Model Configuration}
+
+\subsubsection{SOTA algorithms}
+
+\subsubsection{Experimental Infrastructure}
+
+
+\subsection{Evaluation Metrics}
+
+\subsection{Experimental Protocol}
+
+All experiments evaluate ...
+
+\section{Experimental Results}
+\label{sec:experimental_results}
+
+
+\section{Conclusion}
+...
+
+\printbibliography
+\end{document}
+

@@ -175,6 +175,7 @@ class DetectionPipeline:
                 fisheye_shape = fisheye_img.shape[:2]  # (height, width)
                 fisheye_bboxes = backproject_detections(
                     detections, metadata, fisheye_shape,
+                    compute_lattice=self.cfg.OUTPUT.SAVE_LATTICE_VIZ,
                     lattice_height_samples=self.cfg.BACKPROJECTION.LATTICE_HEIGHT_SAMPLES
                 )
 
@@ -298,19 +299,21 @@ class DetectionPipeline:
                 fisheye_viz_out = results_dir / "fisheye_detections.png"
                 cv2.imwrite(str(fisheye_viz_out), fisheye_viz)
 
-                # Save individual lattice visualization for each bbox
+                # Save individual lattice visualization for each bbox (if enabled)
                 if self.cfg.VERBOSE:
                     print(f"    Fisheye detections: {fisheye_viz_out}")
-                    print(f"    Fisheye bbox lattices (individual):")
+                    if self.cfg.OUTPUT.SAVE_LATTICE_VIZ:
+                        print(f"    Fisheye bbox lattices (individual):")
 
-                for i, bbox in enumerate(fisheye_bboxes):
-                    # Visualize only this bbox's lattice
-                    fisheye_lattice = visualize_bbox_lattice(fisheye_img, [bbox])
-                    fisheye_lattice_out = results_dir / f"fisheye_bbox_lattice_{i}.png"
-                    cv2.imwrite(str(fisheye_lattice_out), fisheye_lattice)
+                if self.cfg.OUTPUT.SAVE_LATTICE_VIZ:
+                    for i, bbox in enumerate(fisheye_bboxes):
+                        # Visualize only this bbox's lattice
+                        fisheye_lattice = visualize_bbox_lattice(fisheye_img, [bbox])
+                        fisheye_lattice_out = results_dir / f"fisheye_bbox_lattice_{i}.png"
+                        cv2.imwrite(str(fisheye_lattice_out), fisheye_lattice)
 
-                    if self.cfg.VERBOSE:
-                        print(f"      [{i}] {fisheye_lattice_out}")
+                        if self.cfg.VERBOSE:
+                            print(f"      [{i}] {fisheye_lattice_out}")
 
         if self.cfg.VERBOSE:
             print(f"\n[5] Saving results...")
