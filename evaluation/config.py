@@ -47,8 +47,10 @@ _C.DATASETS.BOMNI.ROOT_DIR = "datasets/all-datasets/bomni-5841"
 # Frames directory (extracted from videos)
 _C.DATASETS.BOMNI.FRAMES_DIR = "datasets/all-datasets/bomni-5841/frames/scenario1"
 
-# Annotations directory (rotated bboxes from omnidet-rotinv)
-_C.DATASETS.BOMNI.ANNOTATIONS_DIR = "datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1"
+# Annotations directory (rotated bboxes from omnidet-rotinv, manually corrected)
+# Original: "datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1"
+# Corrected: Removed 86 incorrect annotations (25.5%) through manual review
+_C.DATASETS.BOMNI.ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Rotated-annotations/scenario1"
 
 # Sequences to use (only scenario1 top cameras have rotated annotations)
 # Available: ["top-0", "top-1", "top-2", "top-3"]

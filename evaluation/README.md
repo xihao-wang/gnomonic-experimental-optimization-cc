@@ -48,7 +48,31 @@ datasets/all-datasets/
 - `scenario1/side-*` (all 5 side camera videos) - **No rotated annotations available**
 - `scenario2/*` (all scenario 2 videos) - **No rotated annotations available**
 
-Total: **337 annotated images** across 4 sequences with **rotated bounding boxes**.
+**Initial Total:** 337 annotated images across 4 sequences.
+
+### Annotation Quality Review and Correction
+
+After frame extraction, all annotations were visualized and manually reviewed. Due to frame alignment issues (likely caused by variable frame rate and missing frames in the original videos), **86 annotations (25.5%)** were found to have incorrect bbox positions, inaccurate bboxes, missing bboxes, or false positives.
+
+**Manual Correction Process:**
+1. Generated visualizations for all 337 annotations using `evaluation/visualize_bomni_annotations.py`
+2. Manually reviewed each visualization
+3. Deleted visualization images with incorrect annotations
+4. Used `datasets/cleanup_incorrect_annotations.py` to remove corresponding XML and frame files
+
+**Corrected Annotation Statistics:**
+
+| Sequence | Original | Removed | Final | Accuracy |
+|----------|----------|---------|-------|----------|
+| top-0    | 101      | 25      | 76    | 75.2%    |
+| top-1    | 80       | 28      | 52    | 65.0%    |
+| top-2    | 65       | 32      | 33    | 50.8%    |
+| top-3    | 91       | 1       | 90    | 98.9%    |
+| **TOTAL** | **337** | **86** | **251** | **74.5%** |
+
+**Final Dataset:** **251 manually verified correct annotations** across 4 sequences.
+
+**Note:** The corrected annotations are stored in `datasets/all-datasets/BOMNI-corrected/Rotated-annotations/scenario1/` and are used by default in the evaluation configuration.
 
 ### Annotation Format
 
