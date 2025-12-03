@@ -76,16 +76,20 @@ After frame extraction, all annotations were visualized and manually reviewed. D
 
 ### Annotation Format
 
-Annotations are provided in **Pascal VOC XML format** with axis-aligned bounding boxes. The rotation angle for each bbox is calculated as:
+Annotations are provided in **Pascal VOC XML format**, but the fields are **repurposed as storage containers** for rotated bbox parameters rather than traditional axis-aligned boxes.
 
-> "Rotation angle for each bounding box is the angle between a vertical line and a line connecting a image center and bounding box center."
-
-Each annotation contains:
-- `xmin, ymin, xmax, ymax` - Axis-aligned bounding box coordinates
-- `center_x, center_y` - Calculated bbox center
-- `width, height` - Bbox dimensions
-- `angle` - Rotation angle in degrees (0° = vertical up, clockwise positive)
+**What's STORED in the XML files:**
+- `xmin, ymin, xmax, ymax` - Repurposed to encode rotated bbox center and dimensions (NOT axis-aligned coordinates)
 - `class_name` - Always "person"
+
+**What we DERIVE when loading annotations:**
+- `center_x = (xmin + xmax) / 2` - Bbox center X coordinate
+- `center_y = (ymin + ymax) / 2` - Bbox center Y coordinate
+- `width = xmax - xmin` - Width of the tight-fit **rotated** bbox
+- `height = ymax - ymin` - Height of the tight-fit **rotated** bbox
+- `angle` - Rotation angle in degrees, calculated geometrically as: *"the angle between a vertical line and a line connecting the image center and bounding box center"* using `θ = arctan2(Δx, -Δy)`
+
+The width and height represent the dimensions of the **rotated rectangle** that tightly fits the pedestrian, not an axis-aligned box.
 
 ### Frame Extraction
 

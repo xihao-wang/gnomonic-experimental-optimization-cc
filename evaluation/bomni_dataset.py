@@ -1,15 +1,21 @@
 """
 BOMNI Dataset handler for rotated bounding box annotations.
 
-This module provides a class to load and process BOMNI dataset annotations
-in Pascal VOC XML format with rotated bounding boxes.
+This module provides a class to load and process BOMNI dataset annotations.
 
-The rotation angle for each bbox is calculated as described in the omnidet-rotinv README:
+Supports two annotation formats:
+1. "tamura" - Third-party annotations from Tamura et al. (omnidet-rotinv)
+   Format: Pascal VOC XML with repurposed fields (requires angle calculation on load)
+2. "preprocessed" - Our preprocessed JSON annotations (all values precomputed)
+   Format: Clean JSON with center_x, center_y, width, height, angle
+
+The rotation angle for Tamura annotations is calculated as described in the omnidet-rotinv README:
 "Rotation angle for each bounding box is the angle between a vertical line and
 a line connecting a image center and bounding box center."
 """
 
 import os
+import json
 import xml.etree.ElementTree as ET
 import numpy as np
 import cv2
@@ -36,10 +42,21 @@ class BOMNIDataset:
         self.cfg = cfg
         self.root_dir = Path(cfg.DATASETS.BOMNI.ROOT_DIR)
         self.frames_dir = Path(cfg.DATASETS.BOMNI.FRAMES_DIR)
-        self.annotations_dir = Path(cfg.DATASETS.BOMNI.ANNOTATIONS_DIR)
+
+        # Annotation format and directory
+        self.annotation_format = cfg.DATASETS.BOMNI.ANNOTATION_FORMAT
+        if self.annotation_format == "tamura":
+            self.annotations_dir = Path(cfg.DATASETS.BOMNI.TAMURA_ANNOTATIONS_DIR)
+            self.annotation_ext = ".xml"
+        elif self.annotation_format == "preprocessed":
+            self.annotations_dir = Path(cfg.DATASETS.BOMNI.PREPROCESSED_ANNOTATIONS_DIR)
+            self.annotation_ext = ".json"
+        else:
+            raise ValueError(f"Invalid annotation format: {self.annotation_format}. "
+                           f"Must be 'tamura' or 'preprocessed'.")
+
         self.sequences = cfg.DATASETS.BOMNI.SEQUENCES
         self.image_ext = cfg.DATASETS.BOMNI.IMAGE_EXT
-        self.annotation_ext = cfg.DATASETS.BOMNI.ANNOTATION_EXT
 
         # Fisheye image dimensions and center
         self.image_width = cfg.DATASETS.BOMNI.IMAGE_WIDTH
@@ -95,6 +112,7 @@ class BOMNIDataset:
 
         if self.verbose:
             print(f"BOMNI Dataset: Found {len(self.data)} image-annotation pairs")
+            print(f"  Annotation format: {self.annotation_format}")
             for sequence in self.sequences:
                 count = sum(1 for d in self.data if d["sequence"] == sequence)
                 print(f"  {sequence}: {count} images")
@@ -139,10 +157,32 @@ class BOMNIDataset:
 
     def _load_annotations(self, annotation_path: str) -> List[Dict]:
         """
-        Load annotations from Pascal VOC XML file.
+        Load annotations (dispatches to appropriate loader based on format).
 
-        The XML format contains axis-aligned bounding boxes (xmin, ymin, xmax, ymax).
-        The rotation angle is calculated based on the bbox center and image center.
+        Args:
+            annotation_path: Path to annotation file (XML or JSON)
+
+        Returns:
+            List of annotation dicts, each containing:
+                - class_name: str (always "person")
+                - center_x, center_y: float (bbox center)
+                - width, height: float (bbox dimensions)
+                - angle: float (rotation angle in degrees, 0=vertical up, clockwise)
+        """
+        if self.annotation_format == "tamura":
+            return self._load_annotations_tamura(annotation_path)
+        elif self.annotation_format == "preprocessed":
+            return self._load_annotations_preprocessed(annotation_path)
+        else:
+            raise ValueError(f"Invalid annotation format: {self.annotation_format}")
+
+    def _load_annotations_tamura(self, annotation_path: str) -> List[Dict]:
+        """
+        Load annotations from Tamura et al. Pascal VOC XML format.
+
+        The XML format contains repurposed Pascal VOC fields:
+        - xmin, ymin, xmax, ymax encode (center, dimensions) of rotated bbox
+        - Rotation angle must be calculated from bbox center and image center
 
         Args:
             annotation_path: Path to XML annotation file
@@ -150,9 +190,8 @@ class BOMNIDataset:
         Returns:
             List of annotation dicts, each containing:
                 - class_name: str (always "person")
-                - xmin, ymin, xmax, ymax: float (axis-aligned bbox)
                 - center_x, center_y: float (bbox center)
-                - width, height: float (bbox dimensions)
+                - width, height: float (tight-fit rotated bbox dimensions)
                 - angle: float (rotation angle in degrees, 0=vertical up, clockwise)
         """
         tree = ET.parse(annotation_path)
@@ -164,18 +203,16 @@ class BOMNIDataset:
             # Get class name
             class_name = obj.find("name").text
 
-            # Get bounding box
+            # Get bounding box (repurposed Pascal VOC fields)
             bndbox = obj.find("bndbox")
             xmin = float(bndbox.find("xmin").text)
             ymin = float(bndbox.find("ymin").text)
             xmax = float(bndbox.find("xmax").text)
             ymax = float(bndbox.find("ymax").text)
 
-            # Calculate bbox center
+            # Decode rotated bbox parameters from Pascal VOC fields
             center_x = (xmin + xmax) / 2.0
             center_y = (ymin + ymax) / 2.0
-
-            # Calculate bbox dimensions
             width = xmax - xmin
             height = ymax - ymin
 
@@ -185,10 +222,6 @@ class BOMNIDataset:
 
             annotations.append({
                 "class_name": class_name,
-                "xmin": xmin,
-                "ymin": ymin,
-                "xmax": xmax,
-                "ymax": ymax,
                 "center_x": center_x,
                 "center_y": center_y,
                 "width": width,
@@ -196,6 +229,32 @@ class BOMNIDataset:
                 "angle": angle
             })
 
+        return annotations
+
+    def _load_annotations_preprocessed(self, annotation_path: str) -> List[Dict]:
+        """
+        Load annotations from preprocessed JSON format.
+
+        The JSON format contains all rotated bbox parameters precomputed:
+        - center_x, center_y: bbox center coordinates
+        - width, height: tight-fit rotated bbox dimensions
+        - angle: rotation angle in degrees (precomputed)
+        - class_name: object class
+
+        Args:
+            annotation_path: Path to JSON annotation file
+
+        Returns:
+            List of annotation dicts, each containing:
+                - class_name: str (always "person")
+                - center_x, center_y: float (bbox center)
+                - width, height: float (tight-fit rotated bbox dimensions)
+                - angle: float (rotation angle in degrees, 0=vertical up, clockwise)
+        """
+        with open(annotation_path, 'r') as f:
+            annotations = json.load(f)
+
+        # Annotations are already in the correct format
         return annotations
 
     def _calculate_rotation_angle(self, bbox_center_x: float, bbox_center_y: float) -> float:
@@ -320,6 +379,14 @@ class BOMNIDataset:
                     size = (ann["width"], ann["height"])
                     angle = ann["angle"]
 
+                    # Calculate axis-aligned bbox bounds (for label positioning and axis-aligned drawing)
+                    half_width = ann["width"] / 2.0
+                    half_height = ann["height"] / 2.0
+                    xmin = int(ann["center_x"] - half_width)
+                    ymin = int(ann["center_y"] - half_height)
+                    xmax = int(ann["center_x"] + half_width)
+                    ymax = int(ann["center_y"] + half_height)
+
                     if draw_rotated:
                         # Draw rotated rectangle
                         box = cv2.boxPoints(((ann["center_x"], ann["center_y"]), size, angle))
@@ -329,8 +396,8 @@ class BOMNIDataset:
                         # Draw axis-aligned rectangle
                         cv2.rectangle(
                             image,
-                            (int(ann["xmin"]), int(ann["ymin"])),
-                            (int(ann["xmax"]), int(ann["ymax"])),
+                            (xmin, ymin),
+                            (xmax, ymax),
                             bbox_color,
                             bbox_thickness
                         )
@@ -349,8 +416,8 @@ class BOMNIDataset:
                             label_parts.append(f"{angle:.1f}deg")
                         label = " ".join(label_parts)
 
-                        # Position label above bbox
-                        label_pos = (int(ann["xmin"]), int(ann["ymin"]) - 5)
+                        # Position label above bbox (using top-left of axis-aligned approximation)
+                        label_pos = (xmin, ymin - 5)
                         cv2.putText(
                             image,
                             label,
@@ -379,9 +446,17 @@ if __name__ == "__main__":
     """Test BOMNI dataset loading and visualization."""
     from evaluation.config import get_cfg
 
+    print("=" * 70)
+    print("BOMNI Dataset Test")
+    print("=" * 70)
+
     # Load config
     cfg = get_cfg()
     cfg.VERBOSE = True
+
+    print(f"\nAnnotation format: {cfg.DATASETS.BOMNI.ANNOTATION_FORMAT}")
+    print(f"  - 'tamura': Third-party XML (Tamura et al., omnidet-rotinv)")
+    print(f"  - 'preprocessed': Our JSON format (all values precomputed)")
 
     # Create dataset
     dataset = BOMNIDataset(cfg)
@@ -401,3 +476,5 @@ if __name__ == "__main__":
     # Run visualization (limit to 2 images per sequence for testing)
     cfg.VISUALIZATION.MAX_IMAGES_PER_SEQUENCE = 2
     dataset.visualize_annotations(max_images=2)
+
+    print("\n" + "=" * 70)

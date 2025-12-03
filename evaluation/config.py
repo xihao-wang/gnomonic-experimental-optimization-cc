@@ -47,10 +47,22 @@ _C.DATASETS.BOMNI.ROOT_DIR = "datasets/all-datasets/bomni-5841"
 # Frames directory (extracted from videos)
 _C.DATASETS.BOMNI.FRAMES_DIR = "datasets/all-datasets/bomni-5841/frames/scenario1"
 
-# Annotations directory (rotated bboxes from omnidet-rotinv, manually corrected)
+# Annotation format to use
+# Options:
+#   "tamura" - Third-party annotations from Tamura et al. (omnidet-rotinv)
+#              Format: Pascal VOC XML with repurposed fields (requires preprocessing on load)
+#   "preprocessed" - Our preprocessed JSON annotations (all values precomputed)
+#              Format: Clean JSON with center_x, center_y, width, height, angle
+_C.DATASETS.BOMNI.ANNOTATION_FORMAT = "preprocessed"
+
+# Annotations directory - Tamura et al. format (Pascal VOC XML, manually corrected)
 # Original: "datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1"
 # Corrected: Removed 86 incorrect annotations (25.5%) through manual review
-_C.DATASETS.BOMNI.ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Rotated-annotations/scenario1"
+_C.DATASETS.BOMNI.TAMURA_ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Rotated-annotations/scenario1"
+
+# Annotations directory - Preprocessed format (JSON with all values precomputed)
+# Generated from Tamura annotations with precomputed center, angle, width, height
+_C.DATASETS.BOMNI.PREPROCESSED_ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Preprocessed-annotations/scenario1"
 
 # Sequences to use (only scenario1 top cameras have rotated annotations)
 # Available: ["top-0", "top-1", "top-2", "top-3"]
@@ -59,9 +71,6 @@ _C.DATASETS.BOMNI.SEQUENCES = ["top-0", "top-1", "top-2", "top-3"]
 
 # Image format
 _C.DATASETS.BOMNI.IMAGE_EXT = ".jpg"
-
-# Annotation format
-_C.DATASETS.BOMNI.ANNOTATION_EXT = ".xml"
 
 # Image dimensions (from annotations)
 _C.DATASETS.BOMNI.IMAGE_WIDTH = 640

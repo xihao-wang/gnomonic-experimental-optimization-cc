@@ -1,1 +1,11 @@
+feat: Add preprocessed JSON annotation format for BOMNI dataset
 
+Create efficient annotation format with precomputed rotated bbox parameters (center, width, height, angle) to eliminate repeated trigonometric calculations during training and evaluation.
+
+Changes:
+- Add datasets/preprocess_bomni_annotations.py to convert Tamura XML to JSON
+- Update evaluation/config.py with ANNOTATION_FORMAT selector
+- Extend evaluation/bomni_dataset.py to support both "tamura" and "preprocessed" formats
+- Generate 251 JSON files (834 annotations) in BOMNI-corrected/Preprocessed-annotations/
+
+Performance: Preprocessed format avoids arctan2() computation on every load, improving efficiency for large-scale experiments.
