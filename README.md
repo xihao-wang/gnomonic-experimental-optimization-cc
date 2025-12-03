@@ -6,9 +6,10 @@
 - ✅ Phase 1: Infrastructure complete
 - ✅ Phase 2.1-2.3: Detection pipeline functional
 - ✅ Phase 2.4: Results organization & GPU auto-detection
-- ⏳ Phase 2B: Backprojection (planned)
-- ⏳ Phase 3: Dataset loaders (planned)
-- ⏳ Phase 4: Evaluation metrics (planned)
+- ✅ Phase 2B.1: Backprojection first pass (5-point geometric transformation)
+- ⏳ Phase 2B.2: Post-processing (NMS for duplicate detections - deferred)
+- ✅ Phase 3: Dataset infrastructure complete (extensible architecture for other datasets, BOMNI dataset fully implemented)
+- ⏳ Phase 4: Evaluation metrics (next)
 - ⏳ Phase 5: Configuration search (planned)
 
 ---
