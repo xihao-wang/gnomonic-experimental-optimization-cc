@@ -1,11 +1,18 @@
-feat: Add preprocessed JSON annotation format for BOMNI dataset
+feat: Add two-step dataset preparation workflow with manual review
 
-Create efficient annotation format with precomputed rotated bbox parameters (center, width, height, angle) to eliminate repeated trigonometric calculations during training and evaluation.
+Create extensible preparation pipeline for all datasets (BOMNI, PIROPO, etc.).
 
 Changes:
-- Add datasets/preprocess_bomni_annotations.py to convert Tamura XML to JSON
-- Update evaluation/config.py with ANNOTATION_FORMAT selector
-- Extend evaluation/bomni_dataset.py to support both "tamura" and "preprocessed" formats
-- Generate 251 JSON files (834 annotations) in BOMNI-corrected/Preprocessed-annotations/
+- Add datasets/prepare_dataset_step1.py (automated preparation)
+- Add datasets/prepare_dataset_step2.py (semi-automated cleanup after manual review)
+- Add datasets/PREPARATION_README.md (complete workflow documentation)
+- Update evaluation/config.py (add PREPARATION config nodes)
+- Remove legacy standalone scripts (extract, preprocess, cleanup, config)
+- Remove evaluation/visualize_bomni_annotations.py (argparse violation)
 
-Performance: Preprocessed format avoids arctan2() computation on every load, improving efficiency for large-scale experiments.
+Two-step workflow:
+1. Step 1 generates visualizations for manual quality review
+2. User manually deletes incorrect visualization images
+3. Step 2 removes corresponding annotations/frames based on deletions
+
+Architecture will and should work identically for all datasets via unified standard JSON format.

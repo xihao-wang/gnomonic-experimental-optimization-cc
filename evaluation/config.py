@@ -50,19 +50,22 @@ _C.DATASETS.BOMNI.FRAMES_DIR = "datasets/all-datasets/bomni-5841/frames/scenario
 # Annotation format to use
 # Options:
 #   "tamura" - Third-party annotations from Tamura et al. (omnidet-rotinv)
-#              Format: Pascal VOC XML with repurposed fields (requires preprocessing on load)
-#   "preprocessed" - Our preprocessed JSON annotations (all values precomputed)
-#              Format: Clean JSON with center_x, center_y, width, height, angle
-_C.DATASETS.BOMNI.ANNOTATION_FORMAT = "preprocessed"
+#              Format: Pascal VOC XML with repurposed fields (legacy, for reference only)
+#   "standard" - Our standard JSON annotations (all values precomputed)
+#              Format: Clean JSON with center_x, center_y, width, height, angle, class_name
+# Default: "standard" (recommended for all datasets)
+_C.DATASETS.BOMNI.ANNOTATION_FORMAT = "standard"
 
 # Annotations directory - Tamura et al. format (Pascal VOC XML, manually corrected)
 # Original: "datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1"
 # Corrected: Removed 86 incorrect annotations (25.5%) through manual review
+# Note: This is kept for reference and re-conversion if needed
 _C.DATASETS.BOMNI.TAMURA_ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Rotated-annotations/scenario1"
 
-# Annotations directory - Preprocessed format (JSON with all values precomputed)
+# Annotations directory - Standard format (JSON with all values precomputed)
 # Generated from Tamura annotations with precomputed center, angle, width, height
-_C.DATASETS.BOMNI.PREPROCESSED_ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Preprocessed-annotations/scenario1"
+# This is our unified annotation format used by all datasets
+_C.DATASETS.BOMNI.STANDARD_ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Standard-annotations-ours/scenario1"
 
 # Sequences to use (only scenario1 top cameras have rotated annotations)
 # Available: ["top-0", "top-1", "top-2", "top-3"]
@@ -80,6 +83,45 @@ _C.DATASETS.BOMNI.IMAGE_HEIGHT = 480
 # Default: image center (width/2, height/2)
 _C.DATASETS.BOMNI.FISHEYE_CENTER_X = 320.0
 _C.DATASETS.BOMNI.FISHEYE_CENTER_Y = 240.0
+
+# ----------------------------------------------------------------------------
+# BOMNI Dataset Preparation Configuration
+# ----------------------------------------------------------------------------
+
+_C.DATASETS.BOMNI.PREPARATION = CN()
+
+# INPUT: Raw data directories (from download)
+# VIDEO_DIR must point to the scenario1 folder from the downloaded BOMNI dataset
+# This folder contains video files: top-0.mp4, top-1.mp4, top-2.mp4, top-3.mp4
+_C.DATASETS.BOMNI.PREPARATION.VIDEO_DIR = "datasets/all-datasets/bomni-5841/scenario1"
+_C.DATASETS.BOMNI.PREPARATION.RAW_ANNOTATIONS_DIR = "datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1"
+_C.DATASETS.BOMNI.PREPARATION.RAW_ANNOTATION_FORMAT = "tamura"  # Input format (by Tamura et al.) to convert from
+
+# OUTPUT: Target directory (change this for different test runs)
+# Example: "BOMNI-test-1", "BOMNI-test-2", "BOMNI-corrected" (production)
+# All outputs created under datasets/all-datasets/{TARGET_NAME}/
+_C.DATASETS.BOMNI.PREPARATION.TARGET_NAME = "BOMNI-test-run-1"
+
+# Sequences to process
+_C.DATASETS.BOMNI.PREPARATION.SEQUENCES = ["top-0", "top-1", "top-2", "top-3"]
+
+# ----------------------------------------------------------------------------
+# PIROPO Dataset Preparation Configuration
+# ----------------------------------------------------------------------------
+
+_C.DATASETS.PIROPO = CN()
+_C.DATASETS.PIROPO.ENABLED = False
+
+_C.DATASETS.PIROPO.PREPARATION = CN()
+_C.DATASETS.PIROPO.PREPARATION.VIDEO_DIR = ""  # To be specified
+_C.DATASETS.PIROPO.PREPARATION.RAW_ANNOTATIONS_DIR = ""  # To be specified
+_C.DATASETS.PIROPO.PREPARATION.RAW_ANNOTATION_FORMAT = ""  # e.g., "piropo_xml"
+_C.DATASETS.PIROPO.PREPARATION.TARGET_NAME = "PIROPO-test-run-1"
+_C.DATASETS.PIROPO.PREPARATION.SEQUENCES = []  # To be specified
+
+# Fisheye center (to be determined from PIROPO calibration)
+_C.DATASETS.PIROPO.FISHEYE_CENTER_X = 0.0
+_C.DATASETS.PIROPO.FISHEYE_CENTER_Y = 0.0
 
 # ----------------------------------------------------------------------------
 # Future datasets can be added here

@@ -2,8 +2,8 @@
 
 **Project**: Pedestrian Detection in Fisheye Images via Projection-Based Approach
 **Repository**: Single monolithic git repo
-**Status**: Phase 2 - Core Implementation (Detection Pipeline)
-**Last Updated**: 2025-11-15
+**Status**: Phase 3 - Dataset Infrastructure (BOMNI Complete)
+**Last Updated**: 2025-12-03
 
 ---
 
@@ -12,8 +12,8 @@
 | Phase | Task | Status |
 |-------|------|--------|
 | 1 | Infrastructure & Documentation | ✅ COMPLETE |
-| 2 | Detection Pipeline Implementation | 🔄 IN PROGRESS |
-| 3 | Dataset Loaders | ⏳ Pending |
+| 2 | Detection Pipeline Implementation | ✅ COMPLETE (Steps 1-3) |
+| 3 | Dataset Infrastructure | 🔄 IN PROGRESS (BOMNI ✅) |
 | 4 | Evaluation Metrics | ⏳ Pending |
 | 5 | Configuration Search | ⏳ Pending |
 
@@ -102,17 +102,97 @@ Output files created:
 
 ---
 
-## ⏳ Phase 3-5: Pending
+## 🔄 Phase 3: Dataset Infrastructure (IN PROGRESS)
 
-### Phase 3: Dataset Loaders
-- datasets/dataset_loader.py (base class)
-- datasets/bomni_loader.py
-- datasets/piropo_loader.py
-- datasets/adapters/ (XML/text parsers)
+### Objective
+Implement dataset management infrastructure with:
+1. ✅ Unified standard JSON annotation format
+2. ✅ Class-based dataset managers for preparation operations
+3. ✅ Runtime dataset loaders for evaluation
+4. ✅ BOMNI dataset fully integrated and validated
+5. ⏳ PIROPO dataset (placeholder created)
 
-### Phase 4: Evaluation
+### Completed: BOMNI Dataset Integration (2025-12-03) ✅
+
+**Standard JSON Format** (unified across all datasets):
+```json
+{
+  "center_x": float,
+  "center_y": float,
+  "width": float,
+  "height": float,
+  "angle": float,
+  "class_name": string
+}
+```
+
+**Architecture Implemented**:
+- `datasets/base_manager.py` - Abstract base class with shared operations
+  - `convert_to_standard_format()` - Abstract method (dataset-specific)
+  - `visualize_annotations()` - Shared visualization logic
+  - `validate()` - Dataset integrity checking
+  - `get_statistics()` - Dataset statistics
+- `datasets/bomni_manager.py` - BOMNI-specific operations
+  - `extract_frames()` - Extract frames from BOMNI videos
+  - `cleanup_unannotated_frames()` - Remove unannotated frames
+  - `convert_to_standard_format()` - Tamura XML → Standard JSON
+  - `cleanup_incorrect_annotations()` - Remove bad annotations after manual review
+- `datasets/piropo_manager.py` - PIROPO placeholder (NotImplementedError)
+- `datasets/utils/visualization.py` - Shared visualization utilities
+
+**BOMNI Dataset Status**:
+- ✅ Frame extraction from 4 video sequences (top-0 through top-3)
+- ✅ Converted 251 Tamura XML annotations to standard JSON format
+- ✅ Manual quality review: removed 86 incorrect annotations (25.5%)
+- ✅ Final dataset: 251 verified annotations, 834 bounding boxes
+- ✅ All visualizations generated and validated
+- ✅ Annotations stored in: `datasets/all-datasets/BOMNI-corrected/Standard-annotations-ours/`
+
+**Runtime Loaders**:
+- `evaluation/bomni_dataset.py` - BOMNI dataset loader
+  - Loads standard JSON format (primary)
+  - Legacy support for Tamura XML format (reference only)
+  - Integrates with YACS config system
+- `evaluation/visualize_datasets.py` - Multi-dataset visualization script
+  - Configurable dataset selection
+  - Uses manager classes for visualization
+  - Outputs to: `evaluation/results/{dataset}/annotation_visualization/`
+
+**Configuration**:
+- `evaluation/config.py` - Updated with:
+  - `DATASETS.BOMNI.ANNOTATION_FORMAT = "standard"` (default)
+  - `DATASETS.BOMNI.STANDARD_ANNOTATIONS_DIR`
+  - `DATASETS.BOMNI.TAMURA_ANNOTATIONS_DIR` (legacy reference)
+  - `VISUALIZATION.MAX_IMAGES_PER_SEQUENCE = "all"`
+
+**Files Created**:
+- `datasets/base_manager.py`
+- `datasets/bomni_manager.py`
+- `datasets/piropo_manager.py`
+- `datasets/utils/__init__.py`
+- `datasets/utils/visualization.py`
+- `evaluation/visualize_datasets.py`
+
+**Documentation**:
+- Updated `evaluation/README.md` with visualization instructions
+- Updated `dataset-details.tex` with BOMNI annotation format, issues, limitations
+
+**Validation**:
+- ✅ All 251 images load correctly
+- ✅ 834 annotations validated (no integrity errors)
+- ✅ Visualization test passed (all 251 images rendered)
+
+### Next Steps for Phase 3:
+1. Implement PIROPO dataset manager when PIROPO data is ready
+2. Add additional datasets as needed (Fisheye8K, etc.)
+
+---
+
+## ⏳ Phase 4-5: Pending
+
+### Phase 4: Evaluation Metrics
 - evaluation/evaluator.py
-- evaluation/metrics.py
+- evaluation/metrics.py (IoU for rotated boxes, precision, recall, mAP)
 - evaluation/results_aggregator.py
 
 ### Phase 5: Configuration Search
@@ -131,15 +211,23 @@ If memory is compacted, read in this order:
 4. detection-pipeline/config.py - current config
 
 ### Current Implementation Status
-**What**: Detection pipeline steps 1-3 COMPLETE + tested end-to-end ✅
-**How**: Following exact requirements from user prompt
-  - Step 2-1: image-composer API callable (generate_composite_from_config)
-  - Step 2-2 & 2-3: YACS config + YOLO detector with person filtering
-  - Step 3: YOLO detection on composite with hyperparameter control
-**Testing**: End-to-end test PASSED
-  - Fisheye image → 3×3 composite → YOLO detection → 3 pedestrians detected
-  - Output: detection-composite-fisheye-sample.png with bounding boxes
-**Next Phase**: Phase 2B - Implement backprojection to fisheye coordinates (not started)
+**What**: Phase 3 - Dataset Infrastructure (BOMNI complete) ✅
+**Architecture**: Class-based manager pattern
+  - BaseDatasetManager: Abstract base with shared operations
+  - BOMNIManager: BOMNI-specific preparation operations
+  - PIROPOManager: Placeholder for future implementation
+  - Standard JSON format: Unified annotation format across all datasets
+**BOMNI Status**: 251 verified annotations, 834 bounding boxes
+  - Frame extraction ✅
+  - Annotation conversion (Tamura XML → Standard JSON) ✅
+  - Manual quality review (86 removed, 25.5% error rate) ✅
+  - Visualization (all 251 images) ✅
+  - Validation (no integrity errors) ✅
+**How to Use**:
+  - Visualization: `python -m evaluation.visualize_datasets`
+  - Configure datasets in: `evaluation/visualize_datasets.py`
+  - Output location: `evaluation/results/{dataset}/annotation_visualization/`
+**Next Phase**: Phase 4 - Evaluation metrics (IoU for rotated boxes, precision, recall, mAP)
 
 ---
 

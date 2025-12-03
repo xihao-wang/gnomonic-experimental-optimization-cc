@@ -6,7 +6,183 @@ This module handles dataset loading, annotation visualization, and evaluation me
 
 ### Overview
 
-The BOMNI (Boğaziçi University Multi-Omnidirectional Video Tracking Database) dataset has been integrated with support for rotated bounding box annotations. These annotations were provided by a third-party research project ([omnidet-rotinv](https://github.com/your-path-here)) specifically for omnidirectional pedestrian detection.
+The BOMNI (Boğaziçi University Multi-Omnidirectional Video Tracking Database) dataset has been integrated with support for rotated bounding box annotations. These annotations were provided by a third-party research project ([omnidet-rotinv](https://github.com/hitachi-rd-cv/omnidet-rotinv)) specifically for omnidirectional pedestrian detection.
+
+## Dataset Preparation Workflow (From Raw Data)
+
+If you have just downloaded the raw BOMNI dataset with Tamura annotations from this repository ([omnidet-rotinv](https://github.com/hitachi-rd-cv/omnidet-rotinv)), follow these steps to prepare the standard annotation format and generate visualizations.
+
+### Prerequisites
+
+```
+datasets/all-datasets/
+├── bomni-5841/
+│   └── scenario1/
+│       ├── top-0.mp4, top-1.mp4, top-2.mp4, top-3.mp4
+│       └── ...
+└── omnidet-rotinv-master/omnidet-rotinv-master/
+    └── rotate/bomni/rotate/scenario1/
+        ├── top-0/ (*.xml files)
+        ├── top-1/ (*.xml files)
+        ├── top-2/ (*.xml files)
+        └── top-3/ (*.xml files)
+```
+
+### Step 1: Extract Frames from Videos
+
+```python
+from evaluation.config import get_cfg
+from datasets.bomni_manager import BOMNIManager
+
+cfg = get_cfg()
+manager = BOMNIManager(cfg)
+
+# Extract all frames from the 4 video sequences
+manager.extract_frames(
+    video_dir="datasets/all-datasets/bomni-5841/scenario1",
+    output_dir="datasets/all-datasets/bomni-5841/frames/scenario1",
+    sequences=["top-0", "top-1", "top-2", "top-3"]
+)
+```
+
+**Output**: 3345 frames extracted across 4 sequences
+- top-0: 1001 frames
+- top-1: 794 frames
+- top-2: 643 frames
+- top-3: 907 frames
+
+### Step 2: Cleanup Unannotated Frames
+
+Tamura annotations are sparse (~10% of frames). Remove frames without annotations to save disk space:
+
+```python
+manager.cleanup_unannotated_frames(
+    frames_dir="datasets/all-datasets/bomni-5841/frames/scenario1",
+    annotations_dir="datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1",
+    sequences=["top-0", "top-1", "top-2", "top-3"]
+)
+```
+
+**Output**: 337 frames kept (only annotated frames)
+
+### Step 3: Convert to Standard JSON Format
+
+Convert Tamura's Pascal VOC XML format to our unified standard JSON format:
+
+```python
+manager.convert_to_standard_format(
+    input_format="tamura",
+    input_dir="datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1",
+    output_dir="datasets/all-datasets/BOMNI-corrected/Standard-annotations-ours/scenario1",
+    sequences=["top-0", "top-1", "top-2", "top-3"]
+)
+```
+
+**Output**: 337 JSON files created with precomputed values:
+```json
+{
+  "center_x": float,
+  "center_y": float,
+  "width": float,
+  "height": float,
+  "angle": float,
+  "class_name": "person"
+}
+```
+
+### Step 4: Visualize for Quality Review
+
+Generate visualizations to manually review annotation quality:
+
+```python
+manager.visualize_annotations(
+    annotations_dir="datasets/all-datasets/BOMNI-corrected/Standard-annotations-ours/scenario1",
+    frames_dir="datasets/all-datasets/bomni-5841/frames/scenario1",
+    sequences=["top-0", "top-1", "top-2", "top-3"],
+    max_images="all",
+    fisheye_center=(320.0, 240.0)
+)
+```
+
+**Output**: 337 visualization images in `evaluation/results/bomni/annotation_visualization/`
+
+### Step 5: Manual Quality Review
+
+1. Open `evaluation/results/bomni/annotation_visualization/{sequence}/`
+2. Review each visualization image
+3. **DELETE images with incorrect annotations** (wrong bbox position, missing detection, false positive, etc.)
+4. Keep only images with correct annotations
+
+### Step 6: Cleanup Incorrect Annotations
+
+After manual review, remove annotation files and frames that correspond to deleted visualizations:
+
+```python
+manager.cleanup_incorrect_annotations(
+    visualization_dir="evaluation/results/bomni/annotation_visualization",
+    annotations_dir="datasets/all-datasets/BOMNI-corrected/Standard-annotations-ours/scenario1",
+    frames_dir="datasets/all-datasets/bomni-5841/frames/scenario1",
+    sequences=["top-0", "top-1", "top-2", "top-3"]
+)
+```
+
+**Output**: Only verified correct annotations remain (e.g., 251 out of 337)
+
+### Step 7: Regenerate Final Visualizations
+
+Generate clean visualizations with only correct annotations:
+
+```python
+# Update config to use corrected annotations
+cfg.DATASETS.BOMNI.STANDARD_ANNOTATIONS_DIR = "datasets/all-datasets/BOMNI-corrected/Standard-annotations-ours/scenario1"
+
+# Visualize all corrected annotations
+from evaluation.visualize_datasets import main
+main()
+```
+
+**Output**: Final verified visualizations in `evaluation/results/bomni/annotation_visualization/`
+
+### Complete Python Script
+
+Create a file `datasets/prepare_bomni.py`:
+
+```python
+"""
+Complete BOMNI dataset preparation workflow.
+"""
+from evaluation.config import get_cfg
+from datasets.bomni_manager import BOMNIManager
+
+def main():
+    cfg = get_cfg()
+    manager = BOMNIManager(cfg)
+
+    print("Step 1: Extract frames from videos")
+    manager.extract_frames()
+
+    print("\nStep 2: Cleanup unannotated frames")
+    manager.cleanup_unannotated_frames()
+
+    print("\nStep 3: Convert to standard JSON format")
+    manager.convert_to_standard_format(input_format="tamura")
+
+    print("\nStep 4: Visualize for quality review")
+    manager.visualize_annotations(
+        annotations_dir=cfg.DATASETS.BOMNI.STANDARD_ANNOTATIONS_DIR,
+        frames_dir=cfg.DATASETS.BOMNI.FRAMES_DIR,
+        sequences=cfg.DATASETS.BOMNI.SEQUENCES,
+        max_images="all"
+    )
+
+    print("\n[DONE] Review visualizations and delete incorrect ones")
+    print("Then run Step 6 to cleanup incorrect annotations")
+
+if __name__ == "__main__":
+    main()
+```
+
+Run: `python datasets/prepare_bomni.py`
 
 ### Dataset Structure
 
@@ -191,6 +367,57 @@ def _calculate_rotation_angle(bbox_center_x, bbox_center_y):
     return angle_deg
 ```
 
+## Visualizing Dataset Annotations
+
+### Quick Start
+
+To visualize annotations for all configured datasets:
+
+```bash
+python -m evaluation.visualize_datasets
+```
+
+This will generate visualization images with rotated bounding boxes drawn on the fisheye images.
+
+### Configuration
+
+Edit `evaluation/visualize_datasets.py` to specify which datasets to visualize:
+
+```python
+DATASETS_TO_VISUALIZE = [
+    "bomni",
+    # "piropo",  # Uncomment when PIROPO is implemented
+]
+```
+
+Control visualization settings in `evaluation/config.py`:
+
+```python
+# Visualize ALL images
+_C.VISUALIZATION.MAX_IMAGES_PER_SEQUENCE = "all"
+
+# Or limit to N images per sequence for quick testing
+_C.VISUALIZATION.MAX_IMAGES_PER_SEQUENCE = 10
+```
+
+### Output Location
+
+Visualizations are saved to:
+```
+evaluation/results/{dataset_name}/annotation_visualization/{sequence}/
+```
+
+For example, BOMNI visualizations are saved to:
+```
+evaluation/results/bomni/annotation_visualization/
+├── top-0/  (76 images)
+├── top-1/  (52 images)
+├── top-2/  (33 images)
+└── top-3/  (90 images)
+```
+
+Each dataset gets its own folder to avoid conflicts.
+
 ### Next Steps
 
 1. **Implement evaluation metrics** - IoU for rotated boxes, precision, recall, mAP
@@ -201,7 +428,8 @@ def _calculate_rotation_angle(bbox_center_x, bbox_center_y):
 ### Files in this Module
 
 - `config.py` - YACS configuration for evaluation
-- `bomni_dataset.py` - BOMNI dataset handler with rotated bbox support
+- `bomni_dataset.py` - BOMNI dataset handler with rotated bbox support (runtime loader)
+- `visualize_datasets.py` - Multi-dataset visualization script
 - `README.md` - This file
 - `__init__.py` - Module initialization
 

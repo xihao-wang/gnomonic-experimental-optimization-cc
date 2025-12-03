@@ -1,17 +1,21 @@
 """
 BOMNI Dataset handler for rotated bounding box annotations.
 
-This module provides a class to load and process BOMNI dataset annotations.
+This module provides a class to load and process BOMNI dataset annotations at runtime
+(for evaluation and testing).
 
-Supports two annotation formats:
-1. "tamura" - Third-party annotations from Tamura et al. (omnidet-rotinv)
-   Format: Pascal VOC XML with repurposed fields (requires angle calculation on load)
-2. "preprocessed" - Our preprocessed JSON annotations (all values precomputed)
-   Format: Clean JSON with center_x, center_y, width, height, angle
+Primary format: "standard" - Our unified JSON format with all values precomputed
+Legacy format: "tamura" - Third-party XML format (for reference/re-conversion only)
 
-The rotation angle for Tamura annotations is calculated as described in the omnidet-rotinv README:
-"Rotation angle for each bounding box is the angle between a vertical line and
-a line connecting a image center and bounding box center."
+Standard JSON format (recommended):
+{
+    "center_x": float,
+    "center_y": float,
+    "width": float,
+    "height": float,
+    "angle": float,
+    "class_name": string
+}
 """
 
 import os
@@ -46,14 +50,16 @@ class BOMNIDataset:
         # Annotation format and directory
         self.annotation_format = cfg.DATASETS.BOMNI.ANNOTATION_FORMAT
         if self.annotation_format == "tamura":
+            # Legacy format (for reference only)
             self.annotations_dir = Path(cfg.DATASETS.BOMNI.TAMURA_ANNOTATIONS_DIR)
             self.annotation_ext = ".xml"
-        elif self.annotation_format == "preprocessed":
-            self.annotations_dir = Path(cfg.DATASETS.BOMNI.PREPROCESSED_ANNOTATIONS_DIR)
+        elif self.annotation_format == "standard":
+            # Standard JSON format (recommended)
+            self.annotations_dir = Path(cfg.DATASETS.BOMNI.STANDARD_ANNOTATIONS_DIR)
             self.annotation_ext = ".json"
         else:
             raise ValueError(f"Invalid annotation format: {self.annotation_format}. "
-                           f"Must be 'tamura' or 'preprocessed'.")
+                           f"Must be 'tamura' (legacy) or 'standard' (recommended).")
 
         self.sequences = cfg.DATASETS.BOMNI.SEQUENCES
         self.image_ext = cfg.DATASETS.BOMNI.IMAGE_EXT
@@ -171,8 +177,8 @@ class BOMNIDataset:
         """
         if self.annotation_format == "tamura":
             return self._load_annotations_tamura(annotation_path)
-        elif self.annotation_format == "preprocessed":
-            return self._load_annotations_preprocessed(annotation_path)
+        elif self.annotation_format == "standard":
+            return self._load_annotations_standard(annotation_path)
         else:
             raise ValueError(f"Invalid annotation format: {self.annotation_format}")
 
@@ -231,15 +237,17 @@ class BOMNIDataset:
 
         return annotations
 
-    def _load_annotations_preprocessed(self, annotation_path: str) -> List[Dict]:
+    def _load_annotations_standard(self, annotation_path: str) -> List[Dict]:
         """
-        Load annotations from preprocessed JSON format.
+        Load annotations from our standard JSON format.
 
         The JSON format contains all rotated bbox parameters precomputed:
         - center_x, center_y: bbox center coordinates
         - width, height: tight-fit rotated bbox dimensions
         - angle: rotation angle in degrees (precomputed)
         - class_name: object class
+
+        This is our unified annotation format used across all datasets.
 
         Args:
             annotation_path: Path to JSON annotation file
@@ -455,8 +463,8 @@ if __name__ == "__main__":
     cfg.VERBOSE = True
 
     print(f"\nAnnotation format: {cfg.DATASETS.BOMNI.ANNOTATION_FORMAT}")
-    print(f"  - 'tamura': Third-party XML (Tamura et al., omnidet-rotinv)")
-    print(f"  - 'preprocessed': Our JSON format (all values precomputed)")
+    print(f"  - 'tamura': Third-party XML (Tamura et al., legacy format)")
+    print(f"  - 'standard': Our unified JSON format (all values precomputed)")
 
     # Create dataset
     dataset = BOMNIDataset(cfg)
