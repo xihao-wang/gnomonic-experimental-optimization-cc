@@ -11,7 +11,7 @@ Date: 2025-12-04
 
 DATASET_STRUCTURES = {
     "bomni": {
-        "annotation_root": "Standard-annotations-ours",
+        "annotation_root": "Standard-annotations",
         "frames_root": "frames",
         "scenarios": ["scenario1"],
         "sequences": {

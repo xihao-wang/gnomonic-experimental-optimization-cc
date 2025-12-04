@@ -1,22 +1,38 @@
-feat: Add evaluation framework infrastructure (Phase 4, Steps 1-4)
+fix: Separate dataset preparation config from evaluation config
 
-Create extensible evaluation infrastructure for testing multiple projection configurations.
+Create separate configuration files for dataset preparation vs. evaluation runtime.
 
-Changes:
-- Add evaluation/projection_configs/test_configs_v1.json (3 test configurations)
-- Add evaluation/dataset_registry.py (dataset structure definitions, BOMNI only)
-- Add evaluation/output_manager.py (path management without dataset-specific args)
-- Add evaluation/visualization.py (GT + prediction visualization, composite + fisheye)
-- Add plans/phase-4-evaluation-framework.md (implementation plan)
+Architectural Issue:
+- datasets/ preparation scripts were borrowing config from evaluation/
+- Poor separation of concerns (one-time preparation vs. runtime evaluation)
+- Confusing for code maintainability
 
-Output structure:
-- configs-comparison/{json-name}/{config-id}/{dataset}/bboxes-numeric/
-- configs-comparison/{json-name}/{config-id}/{dataset}/bboxes-visuals/composite/
-- configs-comparison/{json-name}/{config-id}/{dataset}/bboxes-visuals/fisheye/
+Solution:
+- Created datasets/config.py for dataset preparation operations
+  - VIDEO_DIR, RAW_ANNOTATIONS_DIR, RAW_ANNOTATION_FORMAT
+  - TARGET_NAME for output directory
+  - SEQUENCES, FISHEYE_CENTER_X/Y
+- Updated evaluation/config.py to only contain runtime evaluation settings
+  - Removed PREPARATION sections
+  - Kept only runtime dataset paths (FRAMES_DIR, ANNOTATIONS_DIR, SEQUENCES)
+- Updated BOMNIManager to handle both config structures
+  - Accepts cfg.BOMNI (datasets/config.py)
+  - Accepts cfg.DATASETS.BOMNI (evaluation/config.py)
+- Updated preparation scripts to use datasets.config
+  - prepare_dataset_step1.py
+  - prepare_dataset_step2.py
 
-Visualization design:
-- GT boxes drawn first (green, thick=2)
-- Predictions drawn on top (red, thin=1)
-- Both visible when aligned
+Files Changed:
+- datasets/config.py (NEW) - Dataset preparation configuration
+- datasets/bomni_manager.py - Handle both config structures
+- datasets/prepare_dataset_step1.py - Use datasets.config
+- datasets/prepare_dataset_step2.py - Use datasets.config
+- evaluation/config.py - Removed PREPARATION sections
 
-Next: Implement evaluation runner and configuration script.
+Architecture:
+- datasets/config.py: One-time dataset preparation (extraction, conversion, cleanup)
+- evaluation/config.py: Runtime evaluation (loading prepared datasets, metrics, visualization)
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>

@@ -85,39 +85,17 @@ _C.DATASETS.BOMNI.FISHEYE_CENTER_X = 320.0
 _C.DATASETS.BOMNI.FISHEYE_CENTER_Y = 240.0
 
 # ----------------------------------------------------------------------------
-# BOMNI Dataset Preparation Configuration
-# ----------------------------------------------------------------------------
-
-_C.DATASETS.BOMNI.PREPARATION = CN()
-
-# INPUT: Raw data directories (from download)
-# VIDEO_DIR must point to the scenario1 folder from the downloaded BOMNI dataset
-# This folder contains video files: top-0.mp4, top-1.mp4, top-2.mp4, top-3.mp4
-_C.DATASETS.BOMNI.PREPARATION.VIDEO_DIR = "datasets/all-datasets/bomni-5841/scenario1"
-_C.DATASETS.BOMNI.PREPARATION.RAW_ANNOTATIONS_DIR = "datasets/all-datasets/omnidet-rotinv-master/omnidet-rotinv-master/rotate/bomni/rotate/scenario1"
-_C.DATASETS.BOMNI.PREPARATION.RAW_ANNOTATION_FORMAT = "tamura"  # Input format (by Tamura et al.) to convert from
-
-# OUTPUT: Target directory (change this for different test runs)
-# Example: "BOMNI-test-1", "BOMNI-test-2", "BOMNI-corrected" (production)
-# All outputs created under datasets/all-datasets/{TARGET_NAME}/
-_C.DATASETS.BOMNI.PREPARATION.TARGET_NAME = "BOMNI-test-run-1"
-
-# Sequences to process
-_C.DATASETS.BOMNI.PREPARATION.SEQUENCES = ["top-0", "top-1", "top-2", "top-3"]
-
-# ----------------------------------------------------------------------------
-# PIROPO Dataset Preparation Configuration
+# PIROPO Dataset Configuration
 # ----------------------------------------------------------------------------
 
 _C.DATASETS.PIROPO = CN()
 _C.DATASETS.PIROPO.ENABLED = False
 
-_C.DATASETS.PIROPO.PREPARATION = CN()
-_C.DATASETS.PIROPO.PREPARATION.VIDEO_DIR = ""  # To be specified
-_C.DATASETS.PIROPO.PREPARATION.RAW_ANNOTATIONS_DIR = ""  # To be specified
-_C.DATASETS.PIROPO.PREPARATION.RAW_ANNOTATION_FORMAT = ""  # e.g., "piropo_xml"
-_C.DATASETS.PIROPO.PREPARATION.TARGET_NAME = "PIROPO-test-run-1"
-_C.DATASETS.PIROPO.PREPARATION.SEQUENCES = []  # To be specified
+# Root directory of PIROPO dataset (to be specified when ready)
+_C.DATASETS.PIROPO.ROOT_DIR = ""
+_C.DATASETS.PIROPO.FRAMES_DIR = ""
+_C.DATASETS.PIROPO.STANDARD_ANNOTATIONS_DIR = ""
+_C.DATASETS.PIROPO.SEQUENCES = []
 
 # Fisheye center (to be determined from PIROPO calibration)
 _C.DATASETS.PIROPO.FISHEYE_CENTER_X = 0.0

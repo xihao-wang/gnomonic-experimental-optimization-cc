@@ -40,10 +40,19 @@ class BOMNIManager(BaseDatasetManager):
         Initialize BOMNI dataset manager.
 
         Args:
-            cfg: YACS config object with DATASETS.BOMNI settings
+            cfg: YACS config object with BOMNI settings
+                 Can be from datasets.config (cfg.BOMNI) or evaluation.config (cfg.DATASETS.BOMNI)
         """
         super().__init__(cfg)
-        self.bomni_cfg = cfg.DATASETS.BOMNI
+        # Handle both config structures
+        if hasattr(cfg, 'BOMNI'):
+            # datasets/config.py structure
+            self.bomni_cfg = cfg.BOMNI
+        elif hasattr(cfg, 'DATASETS') and hasattr(cfg.DATASETS, 'BOMNI'):
+            # evaluation/config.py structure
+            self.bomni_cfg = cfg.DATASETS.BOMNI
+        else:
+            raise ValueError("Config must have either cfg.BOMNI or cfg.DATASETS.BOMNI")
 
     def get_dataset_name(self) -> str:
         """Return dataset identifier."""
@@ -66,12 +75,22 @@ class BOMNIManager(BaseDatasetManager):
             start_index: Starting frame index (default: 1)
         """
         if video_dir is None:
-            video_dir = Path(self.bomni_cfg.ROOT_DIR) / "scenario1"
+            # Try to get video dir from config (dataset config structure)
+            if hasattr(self.bomni_cfg, 'VIDEO_DIR'):
+                video_dir = Path(self.bomni_cfg.VIDEO_DIR)
+            elif hasattr(self.bomni_cfg, 'ROOT_DIR'):
+                video_dir = Path(self.bomni_cfg.ROOT_DIR) / "scenario1"
+            else:
+                raise ValueError("Config must specify VIDEO_DIR or ROOT_DIR")
         else:
             video_dir = Path(video_dir)
 
         if output_dir is None:
-            output_dir = Path(self.bomni_cfg.FRAMES_DIR)
+            # Must be specified as argument or in config
+            if hasattr(self.bomni_cfg, 'FRAMES_DIR'):
+                output_dir = Path(self.bomni_cfg.FRAMES_DIR)
+            else:
+                raise ValueError("output_dir must be specified or FRAMES_DIR must be in config")
         else:
             output_dir = Path(output_dir)
 
@@ -144,12 +163,21 @@ class BOMNIManager(BaseDatasetManager):
             sequences: List of sequence names to clean (default: from config)
         """
         if frames_dir is None:
-            frames_dir = Path(self.bomni_cfg.FRAMES_DIR)
+            if hasattr(self.bomni_cfg, 'FRAMES_DIR'):
+                frames_dir = Path(self.bomni_cfg.FRAMES_DIR)
+            else:
+                raise ValueError("frames_dir must be specified or FRAMES_DIR must be in config")
         else:
             frames_dir = Path(frames_dir)
 
         if annotations_dir is None:
-            annotations_dir = Path(self.bomni_cfg.TAMURA_ANNOTATIONS_DIR)
+            # Try RAW_ANNOTATIONS_DIR first (dataset config), then TAMURA_ANNOTATIONS_DIR (eval config)
+            if hasattr(self.bomni_cfg, 'RAW_ANNOTATIONS_DIR'):
+                annotations_dir = Path(self.bomni_cfg.RAW_ANNOTATIONS_DIR)
+            elif hasattr(self.bomni_cfg, 'TAMURA_ANNOTATIONS_DIR'):
+                annotations_dir = Path(self.bomni_cfg.TAMURA_ANNOTATIONS_DIR)
+            else:
+                raise ValueError("annotations_dir must be specified or RAW_ANNOTATIONS_DIR/TAMURA_ANNOTATIONS_DIR must be in config")
         else:
             annotations_dir = Path(annotations_dir)
 
@@ -245,12 +273,21 @@ class BOMNIManager(BaseDatasetManager):
 
         if input_dir is None:
             if input_format == "tamura":
-                input_dir = Path(self.bomni_cfg.TAMURA_ANNOTATIONS_DIR)
+                # Try RAW_ANNOTATIONS_DIR first (dataset config), then TAMURA_ANNOTATIONS_DIR (eval config)
+                if hasattr(self.bomni_cfg, 'RAW_ANNOTATIONS_DIR'):
+                    input_dir = Path(self.bomni_cfg.RAW_ANNOTATIONS_DIR)
+                elif hasattr(self.bomni_cfg, 'TAMURA_ANNOTATIONS_DIR'):
+                    input_dir = Path(self.bomni_cfg.TAMURA_ANNOTATIONS_DIR)
+                else:
+                    raise ValueError("Config must specify RAW_ANNOTATIONS_DIR or TAMURA_ANNOTATIONS_DIR")
         else:
             input_dir = Path(input_dir)
 
         if output_dir is None:
-            output_dir = Path(self.bomni_cfg.STANDARD_ANNOTATIONS_DIR)
+            if hasattr(self.bomni_cfg, 'STANDARD_ANNOTATIONS_DIR'):
+                output_dir = Path(self.bomni_cfg.STANDARD_ANNOTATIONS_DIR)
+            else:
+                raise ValueError("output_dir must be specified or STANDARD_ANNOTATIONS_DIR must be in config")
         else:
             output_dir = Path(output_dir)
 
@@ -427,12 +464,18 @@ class BOMNIManager(BaseDatasetManager):
         visualization_dir = Path(visualization_dir)
 
         if annotations_dir is None:
-            annotations_dir = Path(self.bomni_cfg.STANDARD_ANNOTATIONS_DIR)
+            if hasattr(self.bomni_cfg, 'STANDARD_ANNOTATIONS_DIR'):
+                annotations_dir = Path(self.bomni_cfg.STANDARD_ANNOTATIONS_DIR)
+            else:
+                raise ValueError("annotations_dir must be specified or STANDARD_ANNOTATIONS_DIR must be in config")
         else:
             annotations_dir = Path(annotations_dir)
 
         if frames_dir is None:
-            frames_dir = Path(self.bomni_cfg.FRAMES_DIR)
+            if hasattr(self.bomni_cfg, 'FRAMES_DIR'):
+                frames_dir = Path(self.bomni_cfg.FRAMES_DIR)
+            else:
+                raise ValueError("frames_dir must be specified or FRAMES_DIR must be in config")
         else:
             frames_dir = Path(frames_dir)
 
