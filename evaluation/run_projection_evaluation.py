@@ -256,16 +256,19 @@ class ProjectionEvaluator:
 
         return composite, metadata, detections, fisheye_bboxes
 
-    def _convert_to_standard_format(self, fisheye_bboxes: List[Dict]) -> List[Dict]:
+    def _convert_to_standard_format(self, fisheye_bboxes: Optional[List[Dict]]) -> List[Dict]:
         """
         Convert detection output to standard JSON format.
 
         Args:
-            fisheye_bboxes: List of fisheye bbox dicts from backprojection
+            fisheye_bboxes: List of fisheye bbox dicts from backprojection (None if no detections)
 
         Returns:
-            List of bbox dicts in standard format
+            List of bbox dicts in standard format (empty list if no detections)
         """
+        if fisheye_bboxes is None or len(fisheye_bboxes) == 0:
+            return []
+
         standard_bboxes = []
         for bbox in fisheye_bboxes:
             standard_bboxes.append({

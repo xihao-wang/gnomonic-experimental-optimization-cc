@@ -27,9 +27,9 @@ from image_composer.multi_persp import generate_composite_from_config
 from image_composer.presets import get_preset  # presets.py imports from multi_persp
 
 # Standard Python imports from detection_pipeline modules
-from config import get_cfg, get_cfg_as_dict
-from yolo_detector import YOLODetector
-from backprojection import backproject_detections, visualize_backprojection, visualize_bbox_lattice
+from detection_pipeline.config import get_cfg, get_cfg_as_dict
+from detection_pipeline.yolo_detector import YOLODetector
+from detection_pipeline.backprojection import backproject_detections, visualize_backprojection, visualize_bbox_lattice
 
 
 class DetectionPipeline:

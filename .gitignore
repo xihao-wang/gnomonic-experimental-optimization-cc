@@ -84,8 +84,10 @@ Thumbs.db
 coding-data/
 planning-data/
 
-# Irrelevant files
+# Irrelevant files or folders
 INFRASTRUCTURE_SUMMARY.txt
 CLAUDE.md
 USER_DEVELOPMENT_PROGRESS.md
 AI_DEVELOPMENT_PROGRESS.md
+.claude/
+.gitignore

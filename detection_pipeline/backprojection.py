@@ -114,16 +114,23 @@ def calculate_radial_angle(x: float, y: float, cx: float, cy: float) -> float:
     """
     Calculate the radial angle from fisheye center to a point.
 
+    Uses the same convention as BOMNI ground truth annotations:
+    - Angle measured from vertical upward direction (negative y-axis)
+    - Rotating clockwise (in image coordinates where y increases downward)
+    - 0° = pointing up, 90° = pointing right, 180° = pointing down, 270° = pointing left
+
     Args:
         x, y: Point coordinates
         cx, cy: Fisheye center coordinates
 
     Returns:
-        Angle in radians (0 to 2π)
+        Angle in radians, matching BOMNI annotation format
     """
     dx = x - cx
     dy = y - cy
-    angle = np.arctan2(dy, dx)
+    # Match BOMNI convention: arctan2(dx, -dy)
+    # -dy because y-axis points down in image coordinates
+    angle = np.arctan2(dx, -dy)
     return angle
 
 

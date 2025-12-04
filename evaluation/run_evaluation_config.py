@@ -8,6 +8,12 @@ Author: Generated for gnomonic projection pedestrian detection project
 Date: 2025-12-04
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 # Configuration JSON file to use
 CONFIG_JSON = "evaluation/projection_configs/test_configs_v1.json"
 

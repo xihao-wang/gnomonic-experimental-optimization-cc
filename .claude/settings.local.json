@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(python evaluation/run_evaluation_config.py:*)"
     ],
     "deny": [],
     "ask": []
