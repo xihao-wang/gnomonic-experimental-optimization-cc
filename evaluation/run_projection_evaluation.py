@@ -4,7 +4,7 @@ Main evaluation runner for projection configuration testing.
 This module orchestrates the evaluation of multiple projection configurations
 on multiple datasets, generating bbox predictions and visualizations.
 
-Author: Generated for gnomonic projection pedestrian detection project
+Author: Yassir Zardoua
 Date: 2025-12-04
 """
 
@@ -193,7 +193,8 @@ class ProjectionEvaluator:
         self._save_predictions(predictions, config_id, dataset_name, relative_path)
 
         # Generate composite visualization
-        self._save_composite_visualization(composite, detections, config_id, dataset_name, image_name)
+        composite_relative_path = relative_path.replace('.json', '.jpg')
+        self._save_composite_visualization(composite, detections, config_id, dataset_name, composite_relative_path)
 
         # Generate fisheye visualization (GT + predictions)
         self._save_fisheye_visualization(
@@ -303,13 +304,13 @@ class ProjectionEvaluator:
         detections: List[Dict],
         config_id: str,
         dataset_name: str,
-        image_name: str
+        relative_path: str
     ):
         """Save composite image with YOLO detections."""
         vis_image = visualize_composite_detections(composite, detections, show_labels=True)
 
         output_path = self.output_manager.get_bboxes_visuals_composite_path(
-            self.json_name, config_id, dataset_name, f"{image_name}.jpg"
+            self.json_name, config_id, dataset_name, relative_path
         )
         self.output_manager.ensure_directories_exist(output_path)
 

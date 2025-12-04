@@ -56,7 +56,7 @@ class OutputPathManager:
         base = self.get_config_base_path(json_name, config_id, dataset_name)
         return base / "bboxes-numeric" / relative_path
 
-    def get_bboxes_visuals_composite_path(self, json_name, config_id, dataset_name, image_name):
+    def get_bboxes_visuals_composite_path(self, json_name, config_id, dataset_name, relative_path):
         """
         Get path for composite image visualization.
 
@@ -64,13 +64,13 @@ class OutputPathManager:
             json_name: Name of JSON file (without .json extension)
             config_id: Configuration ID from JSON
             dataset_name: Dataset name
-            image_name: Image filename (e.g., "0001.jpg")
+            relative_path: Relative path from dataset root (e.g., "scenario1/top-0/0001.jpg")
 
         Returns:
             Path object for composite visualization
         """
         base = self.get_config_base_path(json_name, config_id, dataset_name)
-        return base / "bboxes-visuals" / "composite" / image_name
+        return base / "bboxes-visuals" / "composite" / relative_path
 
     def get_bboxes_visuals_fisheye_path(self, json_name, config_id, dataset_name, relative_path):
         """

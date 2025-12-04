@@ -1,16 +1,14 @@
-fix: Correct backprojected bbox rotation by 90 degrees
+docs: Add evaluation framework README
 
-Backprojection was using standard polar coordinates while BOMNI uses vertical-up convention.
+Add comprehensive documentation for projection configuration evaluation workflow.
 
-Issue:
-- Backprojection used arctan2(dy, dx) - standard polar (0deg = right)
-- BOMNI annotations use arctan2(dx, -dy) - vertical-up (0deg = up, clockwise)
-- Result: Backprojected bboxes rotated 90deg off from ground truth
+Content:
+- Quick start guide and usage instructions
+- Input files: projection config JSON and dataset registry
+- Configuration parameters explanation
+- Output structure (numeric, composite, fisheye)
+- Evaluation workflow and performance notes
+- Troubleshooting common issues
 
-Fix:
-- Changed calculate_radial_angle() to match BOMNI convention
-- Now uses arctan2(dx, -dy) for angle calculation
-- Backprojected bboxes now align correctly with ground truth
-
-Files Changed:
-- detection_pipeline/backprojection.py - Fixed angle calculation formula
+Files:
+- evaluation/README.md (NEW)
