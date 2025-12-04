@@ -27,28 +27,44 @@ This research project aims to detect pedestrians in omnidirectional (fisheye) im
 
 - **No Model Training**: Leverages existing YOLOv8 models
 - **Configuration-Driven**: All parameters controlled via `config.py` files, not argument parsers
-- **Multi-Dataset Support**: BOMNI, PIROPO, and extensible for custom datasets
-- **Systematic Search**: Grid search for optimal projection parameters
-- **Comprehensive Evaluation**: Standard metrics (AP, mAP, AR, F1) computed at multiple IoU thresholds
+- **Multi-Dataset Support**: Extensible for custom datasets
+- **More features to come**: ...
 
 ## Project Structure
 
 ```
 project-root/
-├── image_composer/              # ✓ Existing API - creates composite images
-├── detection_pipeline/          # Detection pipeline implementation
-├── datasets/                    # Dataset loaders & adapters
-├── evaluation/                  # Metrics computation & analysis
-├── config_search/               # Configuration search & comparison
-├── results/                     # Experiment outputs (metrics, visualizations, reports)
-├── utils/                       # Shared utilities
-├── tests/                       # Unit & integration tests
-├── docs/                        # Documentation
-│   ├── ARCHITECTURE.md         # Detailed architecture & data flow
-│   ├── SETUP.md                # Installation & configuration guide
-│   └── API.md                  # Module interfaces & classes
-├── project_config.py            # Global project configuration
-└── main.py                      # Project entry point
+├── image_composer/              # ✅ Composite image generation from fisheye
+│   ├── config.py
+│   ├── multi_persp.py
+│   ├── presets.py
+│   └── README.md
+├── detection_pipeline/          # ✅ YOLO detection + backprojection
+│   ├── config.py                # YACS configuration
+│   ├── pipeline.py              # Main orchestrator
+│   ├── yolo_detector.py         # YOLO wrapper
+│   ├── backprojection.py        # Geometric transformation
+│   ├── models/                  # YOLO models
+│   └── results/                 # Detection outputs
+├── datasets/                    # ✅ Dataset managers & preparation
+│   ├── base_manager.py          # Abstract base class
+│   ├── bomni_manager.py         # BOMNI-specific operations
+│   ├── piropo_manager.py        # PIROPO placeholder
+│   ├── prepare_dataset_step1.py # Automated preparation
+│   ├── prepare_dataset_step2.py # Semi-automated cleanup
+│   ├── PREPARATION_README.md    # Two-step workflow guide
+│   ├── utils/
+│   │   └── visualization.py     # Shared visualization
+│   └── all-datasets/            # Raw and processed datasets
+├── evaluation/                  # 🔄 Evaluation infrastructure
+│   ├── config.py                # YACS configuration
+│   ├── bomni_dataset.py         # BOMNI runtime loader
+│   ├── visualize_datasets.py    # Multi-dataset visualization
+│   ├── README.md                # Dataset documentation
+│   └── results/                 # Evaluation outputs
+├── config_search/               # ⏸️ Configuration search (Phase 5)
+│   └── config.py
+└── results/                     # Experiment outputs
 ```
 
 ## Quick Start
@@ -64,25 +80,34 @@ pip install ultralytics opencv-python numpy scikit-learn matplotlib
 ```
 
 ### 2. Configure
-Edit configuration files in order:
-1. `project_config.py` - Project-wide settings
-2. `datasets/config.py` - Dataset paths
-3. `detection_pipeline/config.py` - Pipeline parameters
-4. `evaluation/config.py` - Evaluation metrics
-5. `config_search/config.py` - Search parameters
+Edit YACS configuration files:
+1. `detection_pipeline/config.py` - Pipeline parameters (YOLO, backprojection)
+2. `evaluation/config.py` - Dataset paths, evaluation settings
+3. `config_search/config.py` - Search parameters (Phase 5)
 
-### 3. Run
+### 3. Prepare Datasets
+See `datasets/PREPARATION_README.md` for complete workflow:
 ```bash
-python main.py
+# Step 1: Automated preparation
+python datasets/prepare_dataset_step1.py
+
+# Manual review: Delete incorrect visualizations
+
+# Step 2: Semi-automated cleanup
+python datasets/prepare_dataset_step2.py
 ```
 
-For detailed setup instructions, see `docs/SETUP.md`
+### 4. Run Detection Pipeline
+```bash
+python detection_pipeline/test_pipeline.py
+```
 
 ## Documentation
 
-- **`docs/ARCHITECTURE.md`**: System design, module responsibilities, data flow
-- **`docs/SETUP.md`**: Installation, configuration, dataset preparation, troubleshooting
-- **`docs/API.md`**: Module interfaces, class signatures, usage examples
+- **`detection_pipeline/README.md`**: Detection pipeline usage and architecture
+- **`datasets/PREPARATION_README.md`**: Two-step dataset preparation workflow
+- **`evaluation/README.md`**: Dataset infrastructure and annotation formats
+- **`image_composer/README.md`**: Composite image generation API
 
 ## Project Implementation Plan
 
@@ -106,44 +131,48 @@ For detailed setup instructions, see `docs/SETUP.md`
 
 ## Module Overview
 
+### `image_composer/`
+Generates gnomonic projection composites from fisheye images. Configurable projection layouts (2×2, 3×3, 2×4, etc.) and FOV parameters.
+
 ### `detection_pipeline/`
-Executes detection on individual images. Uses the image_composer API to generate composites, runs YOLO, and backprojects results to fisheye coordinates.
+Executes detection on individual images. Uses image_composer API to generate composites, runs YOLO, backprojects detections to fisheye coordinates using 5-point geometric transformation.
 
 ### `datasets/`
-Abstracts different dataset formats (BOMNI, PIROPO). Provides unified `DatasetLoader` interface that handles format differences transparently.
+Class-based dataset managers for preparation and validation. Two-step workflow: automated preparation → manual review → semi-automated cleanup. Converts all datasets to unified standard JSON format.
 
 ### `evaluation/`
-Computes standardized metrics (AP, mAP, AR, F1) comparing detections to ground truth. Aggregates results across images and datasets.
+Runtime dataset loaders (BOMNI implemented) and visualization tools. Will compute metrics (AP, mAP, AR, F1) comparing detections to ground truth (Phase 4).
 
 ### `config_search/`
-Systematically searches for optimal projection configurations. Supports grid search (and extensible to random, Bayesian, genetic algorithms).
+Will systematically search for optimal projection configurations (Phase 5). Grid search across projection counts, FOV values, and layouts.
 
 ## Configuration Philosophy
 
-**Principle**: Use config files, not command-line arguments.
+**Principle**: Use YACS config files, not command-line arguments.
 
-- **Global**: `project_config.py`
-- **Per-Module**: `<module>/config.py`
-- **Minimal Runtime**: Can pass config objects, but prefer modifying files
+- **Per-Module**: Each module has its own `config.py` using YACS framework
+- **No argparse**: All parameters configured by editing `.py` files directly
+- **Reproducible**: Configuration committed to git for experiment tracking
 
 This keeps experiments reproducible and configurations explicit.
 
 ## Supported Datasets
 
 ### BOMNI
-- Omnidirectional pedestrian detection dataset
-- XML-format annotations
-- Configurable at: `datasets/config.py` (`BOMNI_ROOT`)
+- Omnidirectional pedestrian detection dataset (251 verified annotations)
+- Standard JSON format (unified across all datasets)
+- Configurable at: `evaluation/config.py` (DATASETS.BOMNI node)
+- Two-step preparation workflow implemented
 
 ### PIROPO
 - Panoramic indoor pedestrian dataset
-- Text-format annotations
-- Configurable at: `datasets/config.py` (`PIROPO_ROOT`)
+- Placeholder implementation (not yet integrated)
 
 ### Adding New Datasets
-1. Create `datasets/<dataset_name>_loader.py` extending `DatasetLoader`
-2. Add entry to `DATASETS_META` in `datasets/config.py`
-3. Create annotation parser in `datasets/adapters/` if needed
+1. Create `datasets/<dataset_name>_manager.py` extending `BaseDatasetManager`
+2. Implement `convert_to_standard_format()` method
+3. Add dataset configuration in `evaluation/config.py`
+4. Use two-step preparation workflow
 
 ## Key Design Decisions
 
@@ -155,12 +184,11 @@ This keeps experiments reproducible and configurations explicit.
 
 ## Next Steps
 
-1. **Review** this structure and suggest changes/improvements
-2. **Implement** modules following the interfaces in `docs/API.md`
-3. **Create** unit tests in `tests/`
-4. **Configure** dataset paths in `datasets/config.py`
-5. **Run** `python main.py` to verify setup
-6. **Execute** experiments once implementations are complete
+1. **Phase 4**: Implement evaluation metrics (IoU for rotated boxes, precision, recall, mAP)
+2. **Phase 5**: Configuration search to find optimal projection setup
+3. **Testing**: Run detection pipeline on different projection configurations
+4. **Analysis**: Compare performance across configurations on BOMNI dataset
+5. **Documentation**: Document optimal configuration findings
 
 ## Dependencies
 
@@ -175,15 +203,13 @@ pillow         # Image I/O
 
 ## Troubleshooting
 
-**YOLO model not found**: Models auto-download to `~/.yolov8/`. Check internet connection or download manually.
+**YOLO model not found**: Models auto-download to `detection_pipeline/models/`. Check internet connection or download manually.
 
-**Dataset not found**: Verify paths in `datasets/config.py` are correct and use absolute paths.
+**Dataset not found**: Verify paths in `evaluation/config.py` (DATASETS node) are correct and use absolute paths.
 
-**GPU not detected**: Set `YOLO_DEVICE = "cpu"` in `detection_pipeline/config.py`.
+**GPU not detected**: Detection pipeline auto-detects GPU. Check `detection_pipeline/config.py` for device settings.
 
-**Memory issues**: Reduce `COMPOSITE_SIZE` or use smaller YOLO model (`yolov8n.pt`).
-
-See `docs/SETUP.md` for more troubleshooting.
+**Visualization fails**: Ensure you run scripts from project root, not from subdirectories.
 
 ## Research Objective
 
