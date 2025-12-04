@@ -1,18 +1,22 @@
-feat: Add two-step dataset preparation workflow with manual review
+feat: Add evaluation framework infrastructure (Phase 4, Steps 1-4)
 
-Create extensible preparation pipeline for all datasets (BOMNI, PIROPO, etc.).
+Create extensible evaluation infrastructure for testing multiple projection configurations.
 
 Changes:
-- Add datasets/prepare_dataset_step1.py (automated preparation)
-- Add datasets/prepare_dataset_step2.py (semi-automated cleanup after manual review)
-- Add datasets/PREPARATION_README.md (complete workflow documentation)
-- Update evaluation/config.py (add PREPARATION config nodes)
-- Remove legacy standalone scripts (extract, preprocess, cleanup, config)
-- Remove evaluation/visualize_bomni_annotations.py (argparse violation)
+- Add evaluation/projection_configs/test_configs_v1.json (3 test configurations)
+- Add evaluation/dataset_registry.py (dataset structure definitions, BOMNI only)
+- Add evaluation/output_manager.py (path management without dataset-specific args)
+- Add evaluation/visualization.py (GT + prediction visualization, composite + fisheye)
+- Add plans/phase-4-evaluation-framework.md (implementation plan)
 
-Two-step workflow:
-1. Step 1 generates visualizations for manual quality review
-2. User manually deletes incorrect visualization images
-3. Step 2 removes corresponding annotations/frames based on deletions
+Output structure:
+- configs-comparison/{json-name}/{config-id}/{dataset}/bboxes-numeric/
+- configs-comparison/{json-name}/{config-id}/{dataset}/bboxes-visuals/composite/
+- configs-comparison/{json-name}/{config-id}/{dataset}/bboxes-visuals/fisheye/
 
-Architecture will and should work identically for all datasets via unified standard JSON format.
+Visualization design:
+- GT boxes drawn first (green, thick=2)
+- Predictions drawn on top (red, thin=1)
+- Both visible when aligned
+
+Next: Implement evaluation runner and configuration script.
