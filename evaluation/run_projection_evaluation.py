@@ -53,11 +53,8 @@ class ProjectionEvaluator:
         # Load projection configurations
         self.load_config()
 
-        # Initialize output manager
-        self.output_manager = OutputPathManager()
-
-        # Extract JSON filename (without extension) for output folders
-        self.json_name = self.config_json_path.stem
+        # Initialize output manager with config JSON path for versioned sessions
+        self.output_manager = OutputPathManager(config_json_path=self.config_json_path)
 
     def load_config(self):
         """Load projection configurations from JSON file."""
@@ -97,7 +94,7 @@ class ProjectionEvaluator:
             print("="*80)
             print(f"\nConfiguration file: {self.config_json_path}")
             print("\nPlease add the YOLO model path to your JSON config:")
-            print('  "yolo_model": "detection_pipeline/models/yolov8n.pt"')
+            print('  "yolo_model": "models/yolov8n.pt"')
             print("\n" + "="*80)
             raise ValueError("YOLO model path must be specified in JSON configuration")
 
@@ -423,13 +420,23 @@ class ProjectionEvaluator:
         dataset_name: str,
         relative_path: str
     ):
-        """Save predicted bboxes in standard JSON format."""
-        output_path = self.output_manager.get_bboxes_numeric_path(
-            self.json_name, config_id, dataset_name, relative_path
+        """Save predicted bboxes in standard JSON format to both hierarchical and flattened structures."""
+        # Save to hierarchical structure (existing)
+        output_path_hierarchical = self.output_manager.get_bboxes_numeric_path(
+            config_id, dataset_name, relative_path
         )
-        self.output_manager.ensure_directories_exist(output_path)
+        self.output_manager.ensure_directories_exist(output_path_hierarchical)
 
-        with open(output_path, 'w') as f:
+        with open(output_path_hierarchical, 'w') as f:
+            json.dump(predictions, f, indent=2)
+
+        # Save to flattened structure (new)
+        output_path_flattened = self.output_manager.get_all_annotations_path(
+            config_id, dataset_name, relative_path
+        )
+        self.output_manager.ensure_directories_exist(output_path_flattened)
+
+        with open(output_path_flattened, 'w') as f:
             json.dump(predictions, f, indent=2)
 
     def _save_composite_visualization(
@@ -440,15 +447,22 @@ class ProjectionEvaluator:
         dataset_name: str,
         relative_path: str
     ):
-        """Save composite image with YOLO detections."""
+        """Save composite image with YOLO detections to both hierarchical and flattened structures."""
         vis_image = visualize_composite_detections(composite, detections, show_labels=True)
 
-        output_path = self.output_manager.get_bboxes_visuals_composite_path(
-            self.json_name, config_id, dataset_name, relative_path
+        # Save to hierarchical structure (existing)
+        output_path_hierarchical = self.output_manager.get_bboxes_visuals_composite_path(
+            config_id, dataset_name, relative_path
         )
-        self.output_manager.ensure_directories_exist(output_path)
+        self.output_manager.ensure_directories_exist(output_path_hierarchical)
+        cv2.imwrite(str(output_path_hierarchical), vis_image)
 
-        cv2.imwrite(str(output_path), vis_image)
+        # Save to flattened structure (new)
+        output_path_flattened = self.output_manager.get_all_images_composite_path(
+            config_id, dataset_name, relative_path
+        )
+        self.output_manager.ensure_directories_exist(output_path_flattened)
+        cv2.imwrite(str(output_path_flattened), vis_image)
 
     def _save_fisheye_visualization(
         self,
@@ -460,7 +474,7 @@ class ProjectionEvaluator:
         relative_path: str,
         fisheye_center: tuple
     ):
-        """Save fisheye image with GT + predicted bboxes."""
+        """Save fisheye image with GT + predicted bboxes to both hierarchical and flattened structures."""
         # Convert relative path from .json to .jpg
         vis_relative_path = relative_path.replace('.json', '.jpg')
 
@@ -470,9 +484,16 @@ class ProjectionEvaluator:
             show_legend=True
         )
 
-        output_path = self.output_manager.get_bboxes_visuals_fisheye_path(
-            self.json_name, config_id, dataset_name, vis_relative_path
+        # Save to hierarchical structure (existing)
+        output_path_hierarchical = self.output_manager.get_bboxes_visuals_fisheye_path(
+            config_id, dataset_name, vis_relative_path
         )
-        self.output_manager.ensure_directories_exist(output_path)
+        self.output_manager.ensure_directories_exist(output_path_hierarchical)
+        cv2.imwrite(str(output_path_hierarchical), vis_image)
 
-        cv2.imwrite(str(output_path), vis_image)
+        # Save to flattened structure (new)
+        output_path_flattened = self.output_manager.get_all_images_fisheye_path(
+            config_id, dataset_name, vis_relative_path
+        )
+        self.output_manager.ensure_directories_exist(output_path_flattened)
+        cv2.imwrite(str(output_path_flattened), vis_image)

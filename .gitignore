@@ -58,7 +58,7 @@ results/
 # YOLO models (.pt files anywhere in subdirectories)
 *.pt
 *.pth
-detection-pipeline/models/
+models/
 ~/.yolov8/
 
 # Logs
@@ -83,6 +83,7 @@ Thumbs.db
 # Project-specific
 coding-data/
 planning-data/
+evaluation/configs-comparison/
 
 # Irrelevant files or folders
 INFRASTRUCTURE_SUMMARY.txt

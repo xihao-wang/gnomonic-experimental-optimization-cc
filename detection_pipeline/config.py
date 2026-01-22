@@ -73,10 +73,10 @@ _C.PROJECTION.TARGET_MP = 'auto'
 
 _C.YOLO = CN()
 
-# YOLO model to use: path to .pt file in detection-pipeline/models/
+# YOLO model to use: path to .pt file in models/ folder at project root
 # Available: yolov8n.pt, yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt
 #            yolo11n.pt, yolo11s.pt, yolo12n.pt, yolo12s.pt, yolo12x.pt, etc.
-# Use relative path from detection-pipeline directory
+# Use relative path from project root
 _C.YOLO.MODEL = "models/yolo12x.pt"
 
 # Device to run YOLO on: "cuda" or "cpu"

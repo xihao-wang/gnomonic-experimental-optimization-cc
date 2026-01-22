@@ -34,7 +34,7 @@ INPUT.IMAGE_PATH = "path/to/fisheye.png"
 # Projection preset: "yolo_grid", "default", "high_coverage", "horizon", "wide_angle", "high_res"
 PROJECTION.PRESET = "yolo_grid"  # 9 projections (3×3 grid, 640×640 composite)
 
-# YOLO model from detection_pipeline/models/
+# YOLO model from project root models/ folder
 YOLO.MODEL = "models/yolov8n.pt"
 
 # Detection confidence threshold
@@ -318,7 +318,7 @@ print(f"Mapping matrices shape: {metadata['mapping_matrices'].shape}")
 ## Troubleshooting
 
 **Issue**: YOLO model not found
-- **Solution**: Ensure model exists in `detection_pipeline/models/` directory
+- **Solution**: Ensure model exists in `models/` directory at project root
 - Check config: `YOLO.MODEL = "models/yolov8n.pt"`
 
 **Issue**: Detection too slow

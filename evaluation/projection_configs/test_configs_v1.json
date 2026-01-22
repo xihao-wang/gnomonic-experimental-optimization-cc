@@ -1,5 +1,5 @@
 {
-  "yolo_model": "detection_pipeline/models/yolo11x.pt",
+  "yolo_model": "models/yolo11x.pt",
   "configurations": [
     {
       "id": "grid-2x2-fov60",
@@ -18,8 +18,8 @@
       "id": "grid-3x3-fov60",
       "name": "3x3 Grid, 60deg FOV (baseline)",
       "proj_nbr": 9,
-      "fov_h": 60.0,
-      "fov_v": 60.0,
+      "fov_h": 70.0,
+      "fov_v": 70.0,
       "latitude": 45.0,
       "lon_0": 0.0,
       "lon_step": 40.0,
