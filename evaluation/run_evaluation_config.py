@@ -4,7 +4,7 @@ User configuration for evaluation framework.
 Edit this file to specify which projection configurations and datasets to evaluate.
 Then run: python evaluation/run_evaluation_config.py
 
-Author: Generated for gnomonic projection pedestrian detection project
+Author: Yassir Zardoua
 Date: 2025-12-04
 """
 

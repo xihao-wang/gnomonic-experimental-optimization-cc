@@ -13,6 +13,8 @@ import cv2
 import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+import torch
+import gc
 
 from evaluation.dataset_registry import get_dataset_structure, list_available_datasets
 from evaluation.output_manager import OutputPathManager
@@ -65,12 +67,112 @@ class ProjectionEvaluator:
         with open(self.config_json_path, 'r') as f:
             config_data = json.load(f)
 
-        self.yolo_model = config_data.get("yolo_model", "detection_pipeline/models/yolov8n.pt")
+        # Validate and load YOLO model path
+        self.yolo_model = self._validate_yolo_model(config_data)
         self.configurations = config_data.get("configurations", [])
 
         if self.verbose:
             print(f"Loaded {len(self.configurations)} projection configurations")
             print(f"YOLO model: {self.yolo_model}")
+
+    def _validate_yolo_model(self, config_data: Dict[str, Any]) -> str:
+        """
+        Validate YOLO model specification in JSON config and check file existence.
+        If model file doesn't exist, ask user if they want to download it automatically.
+
+        Args:
+            config_data: Parsed JSON configuration dictionary
+
+        Returns:
+            str: Path to YOLO model file
+
+        Raises:
+            ValueError: If yolo_model not specified in JSON or user declines download
+            FileNotFoundError: If download fails
+        """
+        # Check if yolo_model is specified in JSON
+        if "yolo_model" not in config_data:
+            print("\n" + "="*80)
+            print("ERROR: 'yolo_model' not specified in JSON configuration")
+            print("="*80)
+            print(f"\nConfiguration file: {self.config_json_path}")
+            print("\nPlease add the YOLO model path to your JSON config:")
+            print('  "yolo_model": "detection_pipeline/models/yolov8n.pt"')
+            print("\n" + "="*80)
+            raise ValueError("YOLO model path must be specified in JSON configuration")
+
+        yolo_model_path = config_data["yolo_model"]
+        model_path = Path(yolo_model_path)
+
+        # Check if model file exists
+        if not model_path.exists():
+            # Extract model name from path
+            model_name = model_path.name
+
+            print("\n" + "="*80)
+            print(f"WARNING: YOLO model file not found at: {yolo_model_path}")
+            print("="*80)
+
+            # Ask user if they want to download
+            response = input(f"\nDo you want to download '{model_name}' automatically? (yes/no): ").strip().lower()
+
+            if response in ['yes', 'y']:
+                print(f"\nDownloading {model_name}...")
+                try:
+                    self._download_yolo_model(model_name, model_path)
+                    print(f"Successfully downloaded {model_name} to {yolo_model_path}")
+                except Exception as e:
+                    print(f"\nERROR: Failed to download model: {e}")
+                    print("\nPlease download manually or use your own model.")
+                    print("Update your JSON config to point to the correct path:")
+                    print(f'  "yolo_model": "path/to/your/model.pt"')
+                    print("="*80)
+                    raise FileNotFoundError(f"Failed to download model: {e}")
+            else:
+                print("\nDownload declined.")
+                print("\nTo proceed, either:")
+                print("1. Place your own .pt model file somewhere in the project")
+                print("2. Update your JSON config to point to that path:")
+                print(f'   "yolo_model": "path/to/your/model.pt"')
+                print("\n" + "="*80)
+                raise ValueError(f"Model file not found and download declined: {yolo_model_path}")
+
+        return yolo_model_path
+
+    def _download_yolo_model(self, model_name: str, destination_path: Path):
+        """
+        Download YOLO model from ultralytics repository.
+
+        Args:
+            model_name: Name of the model file (e.g., 'yolov8n.pt', 'yolo11x.pt')
+            destination_path: Path where to save the model
+
+        Raises:
+            Exception: If download fails
+        """
+        from ultralytics import YOLO
+
+        # Create parent directory if it doesn't exist
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Ultralytics will automatically download the model when instantiated
+        # and we can then copy it to our desired location
+        try:
+            model = YOLO(model_name)
+            # The model is now downloaded by ultralytics to its cache
+            # We need to move/copy it to our specified path
+            import shutil
+
+            # Find where ultralytics cached it
+            cache_path = Path.home() / '.cache' / 'ultralytics' / model_name
+            if cache_path.exists():
+                shutil.copy(cache_path, destination_path)
+            else:
+                # If not in standard cache, the model object has it loaded
+                # Save it to our destination
+                model.save(destination_path)
+        except Exception as e:
+            raise Exception(f"Failed to download {model_name}: {e}")
 
     def run_evaluation(self, dataset_names: List[str]):
         """
@@ -129,10 +231,19 @@ class ProjectionEvaluator:
         if self.verbose:
             print(f"Processing {total_images} images...")
 
-        # Process each image
+        # Create pipeline ONCE for this configuration (YOLO model loaded here)
+        pipeline = self._create_detection_pipeline(config)
+
+        # Process each image with REUSED pipeline
         for idx in range(total_images):
             item = dataset[idx]
-            self._process_image(item, config, dataset_name, dataset_structure, idx, total_images)
+            self._process_image(item, config, dataset_name, dataset_structure, idx, total_images, pipeline)
+
+        # Cleanup after configuration completes
+        del pipeline
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
         if self.verbose:
             print(f"\n[{dataset_name.upper()}] Evaluation complete for config '{config_id}'")
@@ -151,6 +262,39 @@ class ProjectionEvaluator:
 
         return BOMNIDataset(cfg)
 
+    def _create_detection_pipeline(self, config: Dict[str, Any]) -> DetectionPipeline:
+        """
+        Create a DetectionPipeline for a specific projection configuration.
+        Pipeline will be reused across all images in this configuration.
+
+        Args:
+            config: Projection configuration dictionary
+
+        Returns:
+            DetectionPipeline: Initialized pipeline with YOLO model loaded
+        """
+        det_cfg = get_detection_cfg()
+        det_cfg.PROJECTION.PRESET = None  # Use custom config
+        det_cfg.PROJECTION.PROJ_NBR = config["proj_nbr"]
+        det_cfg.PROJECTION.FOV_H = config["fov_h"]
+        det_cfg.PROJECTION.FOV_V = config["fov_v"]
+        det_cfg.PROJECTION.LATITUDE = config["latitude"]
+        det_cfg.PROJECTION.LON_0 = config["lon_0"]
+        det_cfg.PROJECTION.LON_STEP = config["lon_step"]
+        det_cfg.PROJECTION.GRID = tuple(config["grid"])
+        det_cfg.PROJECTION.COMP_SIZE = tuple(config["comp_sz"])
+        det_cfg.PROJECTION.TARGET_MP = config["target_mp"]
+        det_cfg.YOLO.MODEL = self.yolo_model
+        det_cfg.OUTPUT.SAVE_COMPOSITE = False
+        det_cfg.OUTPUT.SAVE_COMPOSITE_VIZ = False
+        det_cfg.OUTPUT.SAVE_FISHEYE_VIZ = False
+        det_cfg.OUTPUT.SAVE_LATTICE_VIZ = False
+        det_cfg.VERBOSE = False
+
+        # Create pipeline ONCE (YOLO model loaded here)
+        pipeline = DetectionPipeline(det_cfg)
+        return pipeline
+
     def _process_image(
         self,
         item: Dict,
@@ -158,7 +302,8 @@ class ProjectionEvaluator:
         dataset_name: str,
         dataset_structure: Dict,
         idx: int,
-        total: int
+        total: int,
+        pipeline: DetectionPipeline
     ):
         """
         Process a single image: detect, backproject, save predictions, visualize.
@@ -170,6 +315,7 @@ class ProjectionEvaluator:
             dataset_structure: Dataset structure from registry
             idx: Current image index
             total: Total images
+            pipeline: REUSED DetectionPipeline object
         """
         config_id = config["id"]
         image = item["image"]
@@ -183,8 +329,8 @@ class ProjectionEvaluator:
         # Compute relative path for this image (dataset-specific structure)
         relative_path = self._compute_relative_path(item, dataset_name)
 
-        # Run detection with this projection configuration
-        composite, metadata, detections, fisheye_bboxes = self._run_detection(image_path, config)
+        # Run detection with REUSED pipeline
+        composite, metadata, detections, fisheye_bboxes = self._run_detection(image_path, config, pipeline)
 
         # Convert fisheye bboxes to standard JSON format
         predictions = self._convert_to_standard_format(fisheye_bboxes)
@@ -201,6 +347,10 @@ class ProjectionEvaluator:
             image, gt_annotations, predictions, config_id, dataset_name,
             relative_path, dataset_structure["fisheye_center"]
         )
+
+        # Explicit cleanup of large objects
+        del composite
+        del metadata
 
     def _compute_relative_path(self, item: Dict, dataset_name: str) -> str:
         """
@@ -220,39 +370,23 @@ class ProjectionEvaluator:
         else:
             raise NotImplementedError(f"Relative path computation for '{dataset_name}' not implemented")
 
-    def _run_detection(self, image_path: str, config: Dict[str, Any]):
+    def _run_detection(self, image_path: str, config: Dict[str, Any], pipeline: DetectionPipeline):
         """
-        Run detection pipeline with specified projection configuration.
+        Run detection using REUSED pipeline.
+        Only updates image path, keeps same YOLO model and projection config.
 
         Args:
             image_path: Path to fisheye image
             config: Projection configuration
+            pipeline: REUSED DetectionPipeline object
 
         Returns:
             Tuple of (composite, metadata, detections, fisheye_bboxes)
         """
-        # Configure detection pipeline
-        det_cfg = get_detection_cfg()
-        det_cfg.INPUT.IMAGE_PATH = image_path
-        det_cfg.PROJECTION.PRESET = None  # Use custom config
-        det_cfg.PROJECTION.PROJ_NBR = config["proj_nbr"]
-        det_cfg.PROJECTION.FOV_H = config["fov_h"]
-        det_cfg.PROJECTION.FOV_V = config["fov_v"]
-        det_cfg.PROJECTION.LATITUDE = config["latitude"]
-        det_cfg.PROJECTION.LON_0 = config["lon_0"]
-        det_cfg.PROJECTION.LON_STEP = config["lon_step"]
-        det_cfg.PROJECTION.GRID = tuple(config["grid"])
-        det_cfg.PROJECTION.COMP_SIZE = tuple(config["comp_sz"])
-        det_cfg.PROJECTION.TARGET_MP = config["target_mp"]
-        det_cfg.YOLO.MODEL = self.yolo_model
-        det_cfg.OUTPUT.SAVE_COMPOSITE = False  # Don't save to pipeline results
-        det_cfg.OUTPUT.SAVE_COMPOSITE_VIZ = False
-        det_cfg.OUTPUT.SAVE_FISHEYE_VIZ = False
-        det_cfg.OUTPUT.SAVE_LATTICE_VIZ = False
-        det_cfg.VERBOSE = False
+        # Update ONLY the image path (everything else stays the same)
+        pipeline.cfg.INPUT.IMAGE_PATH = image_path
 
-        # Run detection
-        pipeline = DetectionPipeline(det_cfg)
+        # Run detection (YOLO model already loaded, just runs inference)
         detections, composite, metadata, results_dir, fisheye_bboxes = pipeline.run()
 
         return composite, metadata, detections, fisheye_bboxes

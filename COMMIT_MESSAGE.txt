@@ -1,14 +1,8 @@
-docs: Add evaluation framework README
+fix: Resolve memory leak in evaluation framework
 
-Add comprehensive documentation for projection configuration evaluation workflow.
+- Reuse DetectionPipeline object across images instead of creating 735 instances (was creating new pipeline + YOLO model per image, now creates once per config)
+- Explicitly clean up large objects (composite, metadata, pipeline) after use
+- Delete mapping_matrices list after copying to combined array to free memory immediately
 
-Content:
-- Quick start guide and usage instructions
-- Input files: projection config JSON and dataset registry
-- Configuration parameters explanation
-- Output structure (numeric, composite, fisheye)
-- Evaluation workflow and performance notes
-- Troubleshooting common issues
-
-Files:
-- evaluation/README.md (NEW)
+Other improvements / minor fixes:
+- Add YOLO model validation with automatic download option if unavailable at specified directory of JSON file

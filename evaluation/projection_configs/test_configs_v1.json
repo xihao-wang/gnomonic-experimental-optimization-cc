@@ -1,5 +1,5 @@
 {
-  "yolo_model": "detection_pipeline/models/yolov8n.pt",
+  "yolo_model": "detection_pipeline/models/yolo11x.pt",
   "configurations": [
     {
       "id": "grid-2x2-fov60",
