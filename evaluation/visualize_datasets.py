@@ -13,7 +13,7 @@ Usage:
     python -m evaluation.visualize_datasets
 """
 
-from evaluation.config import get_cfg
+from evaluation.lib.config import get_cfg
 from datasets.bomni_manager import BOMNIManager
 from datasets.piropo_manager import PIROPOManager
 

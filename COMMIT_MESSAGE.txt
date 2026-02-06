@@ -1,5 +1,0 @@
-feat: version session configs, flatten data folders, and centralize YOLO models
-
-- Add versioned session folders with JSON config backups to avoid overwriting existing folders
-- Introduce flattened all-images/all-annotations structure with prefixed filenames for easier navigation
-- Move YOLO models to project root for shared usage across modules

@@ -42,7 +42,7 @@ VERBOSE = True
 MAX_IMAGES = None  # Set to 5 for quick testing
 
 if __name__ == "__main__":
-    from evaluation.run_projection_evaluation import ProjectionEvaluator
+    from evaluation.lib.backprojection_visual_validator import BackprojectionVisualValidator
 
     print("="*80)
     print("Backprojection Visual Validation Test")
@@ -58,8 +58,8 @@ if __name__ == "__main__":
     print("="*80)
     print()
 
-    # Create evaluator
-    evaluator = ProjectionEvaluator(
+    # Create visual validator
+    validator = BackprojectionVisualValidator(
         config_json_path=CONFIG_JSON,
         dataset_roots=DATASET_ROOTS,
         verbose=VERBOSE,
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     )
 
     # Run visual validation
-    evaluator.run_evaluation(dataset_names=DATASETS)
+    validator.run_validation(dataset_names=DATASETS)
 
     print("\n" + "="*80)
     print("Visual validation complete!")

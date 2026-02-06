@@ -11,9 +11,9 @@ Author: Generated for gnomonic projection pedestrian detection project
 Date: 2025-12-03
 """
 
-from evaluation.config import get_cfg
+from evaluation.lib.config import get_cfg
 from datasets.bomni_manager import BOMNIManager
-from evaluation.bomni_dataset import BOMNIDataset
+from evaluation.lib.bomni_dataset import BOMNIDataset
 
 
 def test_bomni_manager():
