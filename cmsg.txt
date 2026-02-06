@@ -1,29 +1,20 @@
-feat-part1: add side-by-side fisheye/composite visualization export
+feat: implement IoU metrics and visual validation for Phase 5
 
-Add new visualization mode that saves a single image composed of two sub-images:
-- Left: original fisheye with GT and detected bounding boxes
-- Right: corresponding composite image with GT and detected bounding boxes
-- Create new output folder structure:
-  evaluation/configs-comparison/backproj_visual_test_session_N/grid-kxj-fovX/dataset_name/all-images/side-by-side
-- Enable easier visual verification of correct back-projection from composite to fisheye
-- Keep existing separate export folders fisheye and composite unchanged
-- Implement dataset-agnostic support
-- Works with current BOMNI dataset
-- Supports future datasets by specifying annotation format and dataset path
-- Minor refactor for cleaner and extensible visualization pipeline
+Implement rotated rectangle IoU calculation and visual validation tool
+for debugging IoU correctness on fisheye images.
 
-feat-part2: Improve visualization consistency and readability
+New modules:
+- evaluation/lib/metrics.py
+  - compute_rotated_iou(): IoU for rotated bboxes using OpenCV
+  - match_predictions_to_ground_truth(): Greedy matching with IoU threshold
+  - compute_precision_recall(): Precision, recall, F1 calculation
 
-- visualize_composite_detections(): Accept bbox_color and bbox_thickness
-  parameters to allow consistent styling across different visualizations
+- evaluation/validate_iou_visual.py
+  - Visual validation script for IoU debugging
+  - GT visualizations: all bboxes on one fisheye image
+  - Prediction visualizations: each bbox on separate image with IoU values
+  - Configurable via evaluation/lib/config.py (IOU_VALIDATION node)
 
-- create_side_by_side_visualization(): Add white header bar with labels
-  instead of overlaying text on images. Header height and font size scale
-  relative to image dimensions (3% height, min 30px) for compatibility
-  with different dataset resolutions
+Output: evaluation/iou-visual-validation/
 
-- _save_composite_visualization(): Pass prediction color and thickness
-  from config to ensure visual consistency between composite and fisheye
-  images (both use yellow for predictions, green for GT)
-
-Color scheme: GT (green), Predictions (yellow) - consistent across all views
+Tested on BOMNI dataset (10 samples)
