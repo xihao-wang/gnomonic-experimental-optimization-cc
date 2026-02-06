@@ -25,12 +25,16 @@ def visualize_gt_and_predictions(
     gt_annotations: List[Dict],
     pred_annotations: List[Dict],
     fisheye_center: Optional[Tuple[float, float]] = None,
-    show_legend: bool = True
+    show_legend: bool = True,
+    gt_color: Tuple[int, int, int] = (0, 255, 0),
+    gt_thickness: int = 2,
+    pred_color: Tuple[int, int, int] = (0, 255, 255),
+    pred_thickness: int = 3
 ) -> np.ndarray:
     """
     Visualize ground truth and predicted bounding boxes on an image.
 
-    GT boxes are drawn first (green, thick) and predictions on top (red, thin)
+    GT boxes are drawn first (green, thick) and predictions on top (configurable color, thicker)
     so both are visible when they align.
 
     Args:
@@ -39,20 +43,24 @@ def visualize_gt_and_predictions(
         pred_annotations: List of prediction annotation dicts in standard format
         fisheye_center: Optional fisheye center for radial visualization
         show_legend: Whether to add color legend
+        gt_color: BGR color tuple for ground truth bboxes (default: green)
+        gt_thickness: Line thickness for ground truth bboxes (default: 2)
+        pred_color: BGR color tuple for predicted bboxes (default: yellow)
+        pred_thickness: Line thickness for predicted bboxes (default: 3)
 
     Returns:
-        Annotated image with GT (green) and predictions (red)
+        Annotated image with GT and predictions
     """
     # Make a copy to avoid modifying original
     img_vis = image.copy()
 
-    # Draw GT bboxes FIRST (green, thickness=2)
+    # Draw GT bboxes FIRST
     if gt_annotations:
         img_vis = draw_rotated_bbox_on_image(
             image=img_vis,
             annotations=gt_annotations,
-            bbox_color=(0, 255, 0),  # Green
-            bbox_thickness=2,
+            bbox_color=gt_color,
+            bbox_thickness=gt_thickness,
             show_labels=False,
             show_rotation_angle=False,
             draw_rotated=True,
@@ -60,13 +68,13 @@ def visualize_gt_and_predictions(
             fisheye_center=fisheye_center
         )
 
-    # Draw predicted bboxes on top (red, thickness=1, thinner)
+    # Draw predicted bboxes on top
     if pred_annotations:
         img_vis = draw_rotated_bbox_on_image(
             image=img_vis,
             annotations=pred_annotations,
-            bbox_color=(0, 0, 255),  # Red
-            bbox_thickness=1,
+            bbox_color=pred_color,
+            bbox_thickness=pred_thickness,
             show_labels=False,
             show_rotation_angle=False,
             draw_rotated=True,
@@ -76,19 +84,39 @@ def visualize_gt_and_predictions(
 
     # Add legend if requested
     if show_legend:
-        img_vis = add_legend(img_vis, gt_count=len(gt_annotations), pred_count=len(pred_annotations))
+        img_vis = add_legend(
+            img_vis,
+            gt_count=len(gt_annotations),
+            pred_count=len(pred_annotations),
+            gt_color=gt_color,
+            pred_color=pred_color,
+            gt_thickness=gt_thickness,
+            pred_thickness=pred_thickness
+        )
 
     return img_vis
 
 
-def add_legend(image: np.ndarray, gt_count: int = 0, pred_count: int = 0) -> np.ndarray:
+def add_legend(
+    image: np.ndarray,
+    gt_count: int = 0,
+    pred_count: int = 0,
+    gt_color: Tuple[int, int, int] = (0, 255, 0),
+    pred_color: Tuple[int, int, int] = (0, 255, 255),
+    gt_thickness: int = 2,
+    pred_thickness: int = 3
+) -> np.ndarray:
     """
-    Add a legend showing GT (green) and predictions (red) with counts.
+    Add a legend showing GT and predictions with counts and actual colors used.
 
     Args:
         image: Input image
         gt_count: Number of GT annotations
         pred_count: Number of predicted annotations
+        gt_color: BGR color tuple for GT bboxes (default: green)
+        pred_color: BGR color tuple for predicted bboxes (default: yellow)
+        gt_thickness: Line thickness for GT bboxes (default: 2)
+        pred_thickness: Line thickness for predicted bboxes (default: 3)
 
     Returns:
         Image with legend added
@@ -109,13 +137,13 @@ def add_legend(image: np.ndarray, gt_count: int = 0, pred_count: int = 0) -> np.
     )
     cv2.addWeighted(overlay, 0.6, image, 0.4, 0, image)
 
-    # GT legend (green box + text)
+    # GT legend (colored box + text)
     cv2.rectangle(
         image,
         (margin + 10, margin + 15),
         (margin + 30, margin + 25),
-        (0, 255, 0),
-        2
+        gt_color,
+        gt_thickness
     )
     cv2.putText(
         image,
@@ -127,13 +155,13 @@ def add_legend(image: np.ndarray, gt_count: int = 0, pred_count: int = 0) -> np.
         1
     )
 
-    # Predictions legend (red box + text)
+    # Predictions legend (colored box + text)
     cv2.rectangle(
         image,
         (margin + 10, margin + 35),
         (margin + 30, margin + 45),
-        (0, 0, 255),
-        1
+        pred_color,
+        pred_thickness
     )
     cv2.putText(
         image,

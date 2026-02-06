@@ -194,7 +194,7 @@ DATASET_STRUCTURES = {
 
 ### Step 7: Configuration Script
 
-**File**: `evaluation/run_evaluation_config.py`
+**File**: `evaluation/run_backprojection_visual_test.py`
 
 **Purpose**: User-editable configuration for running evaluation.
 
@@ -220,7 +220,7 @@ VERBOSE = True
 
 **Execution**:
 ```bash
-python evaluation/run_evaluation_config.py
+python evaluation/run_backprojection_visual_test.py
 ```
 
 ## File Changes Summary
@@ -231,7 +231,7 @@ python evaluation/run_evaluation_config.py
 3. `evaluation/run_projection_evaluation.py` - Main evaluation runner
 4. `evaluation/visualization.py` - GT + prediction visualization
 5. `evaluation/output_manager.py` - Output path management
-6. `evaluation/run_evaluation_config.py` - User configuration script
+6. `evaluation/run_backprojection_visual_test.py` - User configuration script
 
 ### Modified Files:
 - None (all existing modules used as-is)
@@ -287,12 +287,12 @@ evaluation/
 
 ## Execution Flow
 
-1. User edits `evaluation/run_evaluation_config.py` to specify:
+1. User edits `evaluation/run_backprojection_visual_test.py` to specify:
    - CONFIG_JSON path
    - DATASETS list
    - DATASET_ROOTS paths
 
-2. User runs: `python evaluation/run_evaluation_config.py`
+2. User runs: `python evaluation/run_backprojection_visual_test.py`
 
 3. Program:
    - Loads JSON configuration

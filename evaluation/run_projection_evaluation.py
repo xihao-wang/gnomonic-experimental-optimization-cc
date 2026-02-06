@@ -20,7 +20,7 @@ from evaluation.dataset_registry import get_dataset_structure, list_available_da
 from evaluation.output_manager import OutputPathManager
 from evaluation.visualization import visualize_gt_and_predictions, visualize_composite_detections
 from evaluation.bomni_dataset import BOMNIDataset
-from evaluation.config import get_cfg
+from evaluation.config import get_cfg, get_pred_bbox_color
 from detection_pipeline.config import get_cfg as get_detection_cfg
 from detection_pipeline.pipeline import DetectionPipeline
 from image_composer import generate_composite_from_config
@@ -49,6 +49,9 @@ class ProjectionEvaluator:
         self.dataset_roots = dataset_roots
         self.verbose = verbose
         self.max_images = max_images
+
+        # Load evaluation config for visualization parameters
+        self.eval_cfg = get_cfg()
 
         # Load projection configurations
         self.load_config()
@@ -478,10 +481,20 @@ class ProjectionEvaluator:
         # Convert relative path from .json to .jpg
         vis_relative_path = relative_path.replace('.json', '.jpg')
 
+        # Get visualization parameters from config
+        gt_color = tuple(self.eval_cfg.VISUALIZATION.GT_BBOX_COLOR)
+        gt_thickness = self.eval_cfg.VISUALIZATION.GT_BBOX_THICKNESS
+        pred_color = get_pred_bbox_color(self.eval_cfg)
+        pred_thickness = self.eval_cfg.VISUALIZATION.PRED_BBOX_THICKNESS
+
         vis_image = visualize_gt_and_predictions(
             image, gt_annotations, pred_annotations,
             fisheye_center=fisheye_center,
-            show_legend=True
+            show_legend=True,
+            gt_color=gt_color,
+            gt_thickness=gt_thickness,
+            pred_color=pred_color,
+            pred_thickness=pred_thickness
         )
 
         # Save to hierarchical structure (existing)

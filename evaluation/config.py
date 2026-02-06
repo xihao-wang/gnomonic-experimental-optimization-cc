@@ -21,6 +21,17 @@ from yacs.config import CfgNode as CN
 from pathlib import Path
 
 # ============================================================================
+# Module-level constants
+# ============================================================================
+
+# Prediction bbox color presets (BGR format)
+PRED_BBOX_COLOR_PRESETS = {
+    "yellow": (0, 255, 255),      # High contrast on brown/dark scenes
+    "light_red": (0, 100, 255),   # Orange-red
+    "bright_red": (0, 0, 255)     # Classic red
+}
+
+# ============================================================================
 # Create config object
 # ============================================================================
 
@@ -185,13 +196,25 @@ _C.VISUALIZATION.ENABLED = True
 # Subdirectories will be created per dataset and sequence
 _C.VISUALIZATION.OUTPUT_DIR = "evaluation/results/bomni/annotation_visualization"
 
-# Visualization parameters
-_C.VISUALIZATION.BBOX_COLOR = (0, 255, 0)  # Green (BGR format)
-_C.VISUALIZATION.BBOX_THICKNESS = 2
+# Visualization parameters for ground truth bboxes
+_C.VISUALIZATION.GT_BBOX_COLOR = (0, 255, 0)  # Green (BGR format)
+_C.VISUALIZATION.GT_BBOX_THICKNESS = 2
 _C.VISUALIZATION.FONT_SCALE = 0.5
 _C.VISUALIZATION.FONT_THICKNESS = 1
 _C.VISUALIZATION.SHOW_LABELS = True  # Show class labels ("person")
 _C.VISUALIZATION.SHOW_ROTATION_ANGLE = True  # Show rotation angle in degrees
+
+# Visualization parameters for predicted bboxes
+# Color options:
+#   - "yellow": (0, 255, 255) - High contrast on brown/dark scenes
+#   - "light_red": (0, 100, 255) - Orange-red, good contrast
+#   - "bright_red": (0, 0, 255) - Classic red (default)
+_C.VISUALIZATION.PRED_BBOX_COLOR_PRESET = "yellow"  # Options: "yellow", "light_red", "bright_red"
+_C.VISUALIZATION.PRED_BBOX_THICKNESS = 3  # Thicker than GT for better visibility
+
+# Legacy parameter (kept for backward compatibility with dataset visualization)
+_C.VISUALIZATION.BBOX_COLOR = (0, 255, 0)  # Green (BGR format)
+_C.VISUALIZATION.BBOX_THICKNESS = 2
 
 # Draw rotated rectangle vs axis-aligned rectangle
 _C.VISUALIZATION.DRAW_ROTATED = True  # True = draw rotated bbox, False = draw axis-aligned
@@ -241,6 +264,25 @@ def get_cfg_as_dict(cfg):
         dict: Configuration as dictionary
     """
     return CN.to_py(cfg)
+
+
+def get_pred_bbox_color(cfg):
+    """
+    Get prediction bbox color as BGR tuple from preset string.
+
+    Args:
+        cfg: YACS config object
+
+    Returns:
+        tuple: BGR color tuple (B, G, R)
+    """
+    preset = cfg.VISUALIZATION.PRED_BBOX_COLOR_PRESET.lower()
+
+    if preset not in PRED_BBOX_COLOR_PRESETS:
+        print(f"Warning: Unknown color preset '{preset}', defaulting to yellow")
+        return PRED_BBOX_COLOR_PRESETS["yellow"]
+
+    return PRED_BBOX_COLOR_PRESETS[preset]
 
 
 if __name__ == "__main__":

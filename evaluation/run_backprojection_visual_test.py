@@ -1,11 +1,18 @@
 """
-User configuration for evaluation framework.
+Backprojection visual validation test.
 
-Edit this file to specify which projection configurations and datasets to evaluate.
-Then run: python evaluation/run_evaluation_config.py
+This script runs visual testing to verify that backprojected bounding boxes from
+composite images to fisheye images are correctly aligned with ground truth.
+
+PURPOSE: Visual validation only - generates images with GT and predicted bboxes overlaid.
+This is NOT for computing evaluation metrics (precision, recall, mAP).
+
+Edit this file to specify which projection configurations and datasets to test visually.
+Then run: python evaluation/run_backprojection_visual_test.py
 
 Author: Yassir Zardoua
 Date: 2025-12-04
+Updated: 2026-01-22 (Separated from evaluation metrics computation)
 """
 
 import sys
@@ -38,9 +45,13 @@ if __name__ == "__main__":
     from evaluation.run_projection_evaluation import ProjectionEvaluator
 
     print("="*80)
-    print("Projection Configuration Evaluation")
+    print("Backprojection Visual Validation Test")
     print("="*80)
-    print(f"\nConfiguration file: {CONFIG_JSON}")
+    print("\nPURPOSE: Visual validation of backprojected bounding boxes")
+    print("OUTPUT: Images with GT (green) and predicted (yellow) bboxes overlaid")
+    print("NOTE: This does NOT compute evaluation metrics")
+    print("\n" + "-"*80)
+    print(f"Configuration file: {CONFIG_JSON}")
     print(f"Datasets: {', '.join(DATASETS)}")
     print(f"Verbose: {VERBOSE}")
     print(f"Max images per dataset: {MAX_IMAGES if MAX_IMAGES else 'All'}")
@@ -55,9 +66,9 @@ if __name__ == "__main__":
         max_images=MAX_IMAGES
     )
 
-    # Run evaluation
+    # Run visual validation
     evaluator.run_evaluation(dataset_names=DATASETS)
 
     print("\n" + "="*80)
-    print("Evaluation complete!")
+    print("Visual validation complete!")
     print("="*80)
