@@ -418,11 +418,155 @@ evaluation/results/bomni/annotation_visualization/
 
 Each dataset gets its own folder to avoid conflicts.
 
+## Metrics Evaluation System
+
+### Overview
+
+The metrics evaluation system compares different projection configurations by running the full detection pipeline and computing comprehensive metrics against ground truth annotations.
+
+### Quick Start
+
+**1. Configure which projection configs to evaluate:**
+
+Edit `evaluation/projection_configs_for_metrics.py`:
+```python
+class ProjectionConfigs:
+    CONFIGS = [
+        {
+            "id": "grid-2x2-fov60",
+            "name": "2x2 Grid, 60deg FOV",
+            "proj_nbr": 4,
+            "fov_h": 60.0,
+            "fov_v": 60.0,
+            "latitude": 45.0,
+            "lon_0": 0.0,
+            "lon_step": 90.0,
+            "grid": [2, 2],
+            "comp_sz": [640, 640],
+            "target_mp": "auto"
+        },
+        # Add more configs...
+    ]
+```
+
+**2. Configure evaluation settings (optional):**
+
+Edit `evaluation/lib/config.py` → `METRICS_EVALUATION` section:
+```python
+_C.METRICS_EVALUATION.MAX_IMAGES = None  # None = all, 5 = quick test
+_C.METRICS_EVALUATION.YOLO_MODEL = "models/yolov8m.pt"
+_C.METRICS_EVALUATION.ENABLE_PR_CURVES = True
+```
+
+**3. Run evaluation:**
+
+```bash
+python evaluation/run_metrics_evaluation.py
+```
+
+### Metrics Computed
+
+For each projection configuration, the system computes:
+
+**Per-IoU Threshold (0.30 to 0.95 with 0.05 step):**
+- True Positives (TP), False Positives (FP), False Negatives (FN)
+- Precision, Recall, F1 Score
+- Average Precision (AP) using 11-point interpolation
+
+**Summary Metrics:**
+- **AP@[0.30:0.95]**: Mean AP across all IoU thresholds (comprehensive metric)
+- **AP@0.50**: Standard PASCAL VOC baseline (50% overlap required)
+- **AP@0.75**: Strict COCO-style metric (75% overlap required)
+- **Precision@0.5**, **Recall@0.5**, **F1@0.5**: Per-class metrics at IoU=0.5
+
+**Timing Measurements:**
+- Composite generation time (varies with projection config)
+- YOLO detection time (should be constant across configs)
+- Backprojection time (scales with detections)
+- Soft-NMS time (scales with overlapping boxes)
+- Total end-to-end time per image
+
+### Understanding the Metrics
+
+**Which metric to trust?**
+
+When comparing configurations, focus on:
+1. **AP@0.50** - Industry standard (PASCAL VOC, COCO)
+2. **F1@0.5** - Best balance between precision and recall
+3. **Precision@0.5** - Fewer false positives (higher is better)
+4. **Recall@0.5** - More true detections (higher is better)
+
+**AP@[0.30:0.95]** gives a comprehensive view across all strictness levels, but can be dominated by very loose matching (IoU 0.30-0.40) which may not be practically meaningful.
+
+**Example Interpretation:**
+- Config A: AP@[0.30:0.95]=0.22, AP@0.50=0.29, Precision@0.5=0.48
+- Config B: AP@[0.30:0.95]=0.19, AP@0.50=0.31, Precision@0.5=0.69
+
+→ **Config B is better** because it has higher AP@0.50 and much better precision at the standard IoU=0.5 threshold, even though Config A has slightly higher mean AP.
+
+### Output Structure
+
+Each evaluation run creates a versioned session folder:
+
+```
+evaluation/metrics-evaluation/
+└── metrics_eval_session_N/
+    ├── metadata.txt                     # Session info (model, configs, date)
+    ├── projection_configs_snapshot.py   # Exact config used (reproducibility)
+    └── bomni/
+        ├── metrics.json                 # Full metrics per config
+        ├── timing.json                  # Timing stats per config
+        ├── summary.txt                  # Human-readable summary
+        ├── comparison_table.txt         # Side-by-side comparison
+        └── pr_curves/                   # Precision-Recall curve plots
+            ├── config1_pr_curve_iou0.50.png
+            ├── config1_pr_curve_iou0.75.png
+            └── ...
+```
+
+**Key Files:**
+- **comparison_table.txt** - Shows best config for each metric
+- **metrics.json** - Full numerical results for analysis
+- **pr_curves/** - Visualize precision-recall trade-offs
+
+### How It Works
+
+**Pipeline Flow:**
+1. Load projection configurations from `projection_configs_for_metrics.py`
+2. Load ground truth dataset (BOMNI)
+3. For each configuration:
+   - Generate composite image
+   - Run YOLO detection
+   - Backproject to fisheye coordinates
+   - Apply two-stage NMS
+   - Measure timing at each stage
+4. Evaluate predictions against ground truth at 14 IoU thresholds
+5. Compute AP using 11-point interpolation (PASCAL VOC style)
+6. Generate comparison tables and PR curves
+7. Identify best configuration for each metric
+
+**Two-Stage NMS:**
+- **Stage 1 (Composite)**: Standard NMS with IoU=0.8 (keeps overlapping boxes)
+- **Stage 2 (Fisheye)**: Soft-NMS with Gaussian decay for rotated boxes
+
+**IoU Threshold Range:**
+- Evaluation uses 0.30-0.95 (lower than COCO's 0.50-0.95)
+- Starting from 0.30 captures easier detections
+- Helps diagnose if model detects objects but with poor localization
+
+### Interpreting Detection Coverage
+
+Check the timing.json file to see detection coverage:
+- If backprojection count < total images → some images had NO detections
+- Example: 228/245 images = 93% detection coverage (7% complete misses)
+
+This is crucial for understanding low AP scores - configurations may be missing detections entirely on some images rather than just having poor localization.
+
 ### Next Steps
 
-1. **Implement evaluation metrics** - IoU for rotated boxes, precision, recall, mAP
-2. **Integrate with detection pipeline** - Run YOLO on BOMNI images, backproject, and evaluate
-3. **Configuration search** - Test different projection configurations on BOMNI dataset
+1. ~~**Implement evaluation metrics**~~ ✅ COMPLETE
+2. ~~**Integrate with detection pipeline**~~ ✅ COMPLETE
+3. **Configuration search** - Systematically test parameter ranges (Phase 6)
 4. **Add more datasets** - PIROPO, Mirror Worlds, CVRG (if needed)
 
 ### Files in this Module

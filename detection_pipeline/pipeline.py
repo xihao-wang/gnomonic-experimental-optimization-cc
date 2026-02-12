@@ -38,17 +38,26 @@ class DetectionPipeline:
     Orchestrates the detection pipeline: fisheye -> composite -> YOLO detection.
     """
 
-    def __init__(self, cfg=None):
+    def __init__(self, cfg=None, model_path=None, conf_threshold=None):
         """
         Initialize detection pipeline.
 
         Args:
             cfg: YACS config object. If None, uses default config.
+            model_path: Optional path to YOLO model (overrides cfg if provided)
+            conf_threshold: Optional confidence threshold (overrides cfg if provided)
         """
         if cfg is None:
             cfg = get_cfg()
 
         self.cfg = cfg
+
+        # Override config with direct parameters if provided
+        if model_path is not None:
+            self.cfg.YOLO.MODEL = model_path
+        if conf_threshold is not None:
+            self.cfg.YOLO.CONFIDENCE_THRESHOLD = conf_threshold
+
         self.detector = None
         self._init_detector()
 
@@ -120,55 +129,89 @@ class DetectionPipeline:
 
         return proj_cfg
 
-    def run(self):
+    def run(self, fisheye_image=None, projection_config=None, timer=None):
         """
         Execute the full detection pipeline.
 
+        Args:
+            fisheye_image: Optional numpy array of fisheye image (H, W, 3).
+                          If None, loads from config.
+            projection_config: Optional projection configuration dict.
+                             If None, builds from config.
+            timer: Optional PipelineTimer for measuring stage execution times.
+                  If None, no timing is performed.
+
         Returns:
-            tuple: (detections, composite_image, metadata, results_dir, fisheye_bboxes) where:
-                - detections: list of detection dicts in composite coordinate space
-                - composite_image: numpy array of composite image (H, W, 3)
-                - metadata: dict with projection info for backprojection
-                - results_dir: path to results directory for this run
-                - fisheye_bboxes: list of backprojected bbox dicts (None if backprojection disabled)
+            If fisheye_image and projection_config are provided (metrics mode):
+                list: fisheye_bboxes (backprojected detections)
+            Otherwise (normal mode):
+                tuple: (detections, composite_image, metadata, results_dir, fisheye_bboxes)
         """
-        if self.cfg.VERBOSE:
+        # Metrics mode: simplified pipeline without saving
+        metrics_mode = (fisheye_image is not None and projection_config is not None)
+
+        # Wrap in total timing context if timer provided
+        if timer is not None:
+            from evaluation.lib.timing import time_total_end_to_end
+            timing_context = time_total_end_to_end(timer)
+            timing_context.__enter__()
+        else:
+            timing_context = None
+        if self.cfg.VERBOSE and not metrics_mode:
             print("=" * 80)
             print("DETECTION PIPELINE START")
             print("=" * 80)
 
         # Step 1: Build projection configuration
-        if self.cfg.VERBOSE:
-            print("\n[1] Building projection configuration...")
-        proj_cfg = self._build_projection_config()
+        if projection_config is not None:
+            proj_cfg = projection_config
+        else:
+            if self.cfg.VERBOSE:
+                print("\n[1] Building projection configuration...")
+            proj_cfg = self._build_projection_config()
 
         # Step 2: Create composite image
-        if self.cfg.VERBOSE:
+        if self.cfg.VERBOSE and not metrics_mode:
             print("[2] Generating composite image from fisheye...")
-            print(f"    Image: {proj_cfg['img_path']}")
+            print(f"    Image: {proj_cfg.get('img_path', 'from memory')}")
             print(f"    Projections: {proj_cfg['proj_nbr']}, Grid: {proj_cfg['grid']}")
             print(f"    Composite size: {proj_cfg['comp_sz']}")
 
         try:
-            composite_image, metadata = generate_composite_from_config(proj_cfg)
+            # Wrap composite generation in timing if timer provided
+            if timer is not None:
+                from evaluation.lib.timing import time_composite_generation
+                with time_composite_generation(timer):
+                    composite_image, metadata = generate_composite_from_config(proj_cfg, fisheye_img=fisheye_image)
+            else:
+                # No timing
+                composite_image, metadata = generate_composite_from_config(proj_cfg, fisheye_img=fisheye_image)
         except Exception as e:
+            if timing_context is not None:
+                timing_context.__exit__(None, None, None)
             print(f"ERROR: Failed to generate composite image: {e}")
             raise
 
-        if self.cfg.VERBOSE:
+        if self.cfg.VERBOSE and not metrics_mode:
             print(f"    ✓ Generated composite of size {composite_image.shape}")
 
         # Step 3: Run YOLO detection
-        if self.cfg.VERBOSE:
+        if self.cfg.VERBOSE and not metrics_mode:
             print("[3] Running YOLO detection on composite...")
             print(f"    Model: {self.cfg.YOLO.MODEL}")
             print(f"    Device: {self.detector.device}")
             print(f"    Confidence threshold: {self.cfg.YOLO.CONFIDENCE_THRESHOLD}")
             print(f"    IoU threshold: {self.cfg.YOLO.IOU_THRESHOLD}")
 
-        detections = self.detector.detect(composite_image, class_filter="person")
+        # Wrap YOLO detection in timing if timer provided
+        if timer is not None:
+            from evaluation.lib.timing import time_yolo_detection
+            with time_yolo_detection(timer):
+                detections = self.detector.detect(composite_image, class_filter="person")
+        else:
+            detections = self.detector.detect(composite_image, class_filter="person")
 
-        if self.cfg.VERBOSE:
+        if self.cfg.VERBOSE and not metrics_mode:
             print(f"    ✓ Found {len(detections)} detections (after YOLO internal NMS)")
             if self.cfg.NMS.STAGE1.ENABLED:
                 print(f"    (Stage 1 NMS applied by YOLO with IoU threshold: {self.cfg.NMS.STAGE1.IOU_THRESHOLD})")
@@ -176,25 +219,42 @@ class DetectionPipeline:
                 print(f"      [{i}] {det['class_name']} at ({det['x']:.3f}, {det['y']:.3f}), "
                       f"conf={det['confidence']:.3f}")
 
-        # Step 4: Backproject to fisheye coordinates (if enabled)
+        # Step 4: Backproject to fisheye coordinates (always enabled in metrics mode)
         fisheye_bboxes = None
-        if self.cfg.BACKPROJECTION.ENABLED and len(detections) > 0:
-            if self.cfg.VERBOSE:
+        should_backproject = metrics_mode or (self.cfg.BACKPROJECTION.ENABLED and len(detections) > 0)
+
+        if should_backproject and len(detections) > 0:
+            if self.cfg.VERBOSE and not metrics_mode:
                 print("[4] Backprojecting detections to fisheye coordinates...")
 
-            # Load original fisheye image for backprojection
-            fisheye_img = cv2.imread(proj_cfg['img_path'])
+            # Get fisheye image
+            if fisheye_image is not None:
+                fisheye_img = fisheye_image
+            else:
+                fisheye_img = cv2.imread(proj_cfg['img_path'])
+
             if fisheye_img is None:
                 print(f"    WARNING: Could not load fisheye image for backprojection")
             else:
                 fisheye_shape = fisheye_img.shape[:2]  # (height, width)
-                fisheye_bboxes = backproject_detections(
-                    detections, metadata, fisheye_shape,
-                    compute_lattice=self.cfg.OUTPUT.SAVE_LATTICE_VIZ,
-                    lattice_height_samples=self.cfg.BACKPROJECTION.LATTICE_HEIGHT_SAMPLES
-                )
 
-                if self.cfg.VERBOSE:
+                # Wrap backprojection in timing if timer provided
+                if timer is not None:
+                    from evaluation.lib.timing import time_backprojection
+                    with time_backprojection(timer):
+                        fisheye_bboxes = backproject_detections(
+                            detections, metadata, fisheye_shape,
+                            compute_lattice=self.cfg.OUTPUT.SAVE_LATTICE_VIZ if not metrics_mode else False,
+                            lattice_height_samples=self.cfg.BACKPROJECTION.LATTICE_HEIGHT_SAMPLES
+                        )
+                else:
+                    fisheye_bboxes = backproject_detections(
+                        detections, metadata, fisheye_shape,
+                        compute_lattice=self.cfg.OUTPUT.SAVE_LATTICE_VIZ if not metrics_mode else False,
+                        lattice_height_samples=self.cfg.BACKPROJECTION.LATTICE_HEIGHT_SAMPLES
+                    )
+
+                if self.cfg.VERBOSE and not metrics_mode:
                     print(f"    ✓ Backprojected {len(fisheye_bboxes)} bboxes to fisheye")
                     for i, bbox in enumerate(fisheye_bboxes):
                         num_lattice = len(bbox.get('lattice_points', []))
@@ -203,33 +263,78 @@ class DetectionPipeline:
 
                 # Apply Stage 2 Soft-NMS if enabled
                 if self.cfg.NMS.STAGE2.ENABLED and len(fisheye_bboxes) > 0:
-                    if self.cfg.VERBOSE:
+                    if self.cfg.VERBOSE and not metrics_mode:
                         print(f"    Applying Stage 2 Soft-NMS (sigma={self.cfg.NMS.STAGE2.SIGMA}, "
                               f"threshold={self.cfg.NMS.STAGE2.SCORE_THRESHOLD})...")
 
                     fisheye_bboxes_before = len(fisheye_bboxes)
-                    fisheye_bboxes = apply_stage2_nms(
-                        fisheye_bboxes,
-                        sigma=self.cfg.NMS.STAGE2.SIGMA,
-                        score_threshold=self.cfg.NMS.STAGE2.SCORE_THRESHOLD
-                    )
 
-                    if self.cfg.VERBOSE:
+                    # Wrap Soft-NMS in timing if timer provided
+                    if timer is not None:
+                        from evaluation.lib.timing import time_soft_nms
+                        with time_soft_nms(timer):
+                            fisheye_bboxes = apply_stage2_nms(
+                                fisheye_bboxes,
+                                sigma=self.cfg.NMS.STAGE2.SIGMA,
+                                score_threshold=self.cfg.NMS.STAGE2.SCORE_THRESHOLD
+                            )
+                    else:
+                        fisheye_bboxes = apply_stage2_nms(
+                            fisheye_bboxes,
+                            sigma=self.cfg.NMS.STAGE2.SIGMA,
+                            score_threshold=self.cfg.NMS.STAGE2.SCORE_THRESHOLD
+                        )
+
+                    if self.cfg.VERBOSE and not metrics_mode:
                         print(f"    ✓ Stage 2 Soft-NMS: {fisheye_bboxes_before} → {len(fisheye_bboxes)} detections")
                         for i, bbox in enumerate(fisheye_bboxes):
                             print(f"      [{i}] {bbox['class_name']} at center ({bbox['center'][0]:.1f}, {bbox['center'][1]:.1f}), "
                                   f"angle={bbox['angle']:.1f}°, conf={bbox.get('confidence', 0):.3f}")
 
-        # Step 5: Save results
-        results_dir = self._save_results(proj_cfg, composite_image, detections, metadata, fisheye_bboxes)
+        # Step 5: Save results (skip in metrics mode)
+        if metrics_mode:
+            # Metrics mode: exit timing context and return only fisheye bboxes
+            if timing_context is not None:
+                timing_context.__exit__(None, None, None)
 
-        if self.cfg.VERBOSE:
-            print("=" * 80)
-            print("DETECTION PIPELINE COMPLETE")
-            print(f"Results saved to: {results_dir}")
-            print("=" * 80)
+            # Convert fisheye_bboxes to standard format expected by evaluator
+            if fisheye_bboxes is None or len(fisheye_bboxes) == 0:
+                return []
 
-        return detections, composite_image, metadata, results_dir, fisheye_bboxes
+            # Convert format from backprojection output to evaluator expected format
+            # Backprojection format: {center: (x, y), size: (w, h), angle, confidence, class_name}
+            # Evaluator format: {center_x, center_y, width, height, angle, confidence, class_name}
+            converted_bboxes = []
+            for bbox in fisheye_bboxes:
+                center_x, center_y = bbox['center']
+                width, height = bbox['size']
+
+                converted_bboxes.append({
+                    'center_x': center_x,
+                    'center_y': center_y,
+                    'width': width,
+                    'height': height,
+                    'angle': bbox['angle'],
+                    'confidence': bbox.get('confidence', 0.0),
+                    'class_name': bbox.get('class_name', 'person')
+                })
+
+            return converted_bboxes
+        else:
+            # Normal mode: save results and return full output
+            results_dir = self._save_results(proj_cfg, composite_image, detections, metadata, fisheye_bboxes)
+
+            if self.cfg.VERBOSE:
+                print("=" * 80)
+                print("DETECTION PIPELINE COMPLETE")
+                print(f"Results saved to: {results_dir}")
+                print("=" * 80)
+
+            # Exit timing context if active
+            if timing_context is not None:
+                timing_context.__exit__(None, None, None)
+
+            return detections, composite_image, metadata, results_dir, fisheye_bboxes
 
     def _save_results(self, proj_cfg, composite_image, detections, metadata, fisheye_bboxes=None):
         """

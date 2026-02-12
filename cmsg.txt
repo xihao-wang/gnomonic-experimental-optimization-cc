@@ -1,12 +1,13 @@
-feat: implement two-stage NMS and video processing pipeline
+feat: implement Phase 5 metrics evaluation system for projection config comparison
 
-- Add two-stage NMS: standard NMS on composite (IoU 0.8), Soft-NMS on fisheye tailored to rotated bboxes.
-- Fix 90° rotation bug in backprojection by correcting corner computation to match OpenCV convention
-- Create video processing script with versioned session folders (detection_pipeline/results/video_demos/{video}_session_N/)
-- Save fisheye detections, composite detections, and metadata for each session
-- Add real-time display window with keyboard interrupt (press Q to quit)
-- Rebalance NMS thresholds due to bad results when replicating Chiang's* values
-- Fix model path resolution to use unified models/ folder at project root
-- Update .gitignore to exclude video files and detection_pipeline/results/
-
-* Chiang, H.-T., Cheng, H.-Y., Chen, Y.-H. & Tsai, D.-Y. Efficient pedestrian detection in top-view fisheye images using compositions of perspective view patches. Signal Processing: Image Communication 97, 116304 (2021).
+- Add comprehensive metrics evaluation with per-image IoU matching at 14 IOU thresholds (0.30-0.95)
+- Implement dataset-level aggregation with AP calculation using 11-point interpolation (PASCAL VOC style)
+- Generate precision-recall curves for each configuration at each IoU threshold
+- Add pipeline timing measurements for 5 stages: composite gen, YOLO, backprojection, soft-NMS, total end-to-end
+- Create automatic comparison tables and summary reports identifying best configuration based on computed metric values
+- Integrate optional timing support into detection pipeline (backward compatible, zero overhead when disabled)
+- Support pre-loaded fisheye images in composite generation for efficiency
+- Centralize all editable parameters in config.py (projection configs, YOLO model, datasets, IoU thresholds, output settings)
+- Generate versioned session folders with full reproducibility (metrics, timing, PR curves, config snapshot)
+- Test successfully on 245 BOMNI images. More Dataset handles will be added later.
+- Update relevant README files

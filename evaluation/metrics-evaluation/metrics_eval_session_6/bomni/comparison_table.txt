@@ -1,0 +1,30 @@
+================================================================================
+Configuration Comparison: BOMNI Dataset
+================================================================================
+
+Metric          |   grid-2x2-fov60   | chiang-2021-baseli 
+----------------|--------------------|--------------------
+AP@[0.30:0.95]  |       0.219        |       0.194        
+AP@0.50         |       0.295        |       0.310        
+AP@0.75         |       0.091        |       0.062        
+Precision@0.5   |       0.480        |       0.688        
+Recall@0.5      |       0.326        |       0.390        
+F1@0.5          |       0.389        |       0.498        
+
+Timing (mean per image):
+Total Time      |      0.110      s |      0.127      s 
+Composite Gen   |      0.054      s |      0.058      s 
+YOLO Detection  |      0.055      s |      0.068      s 
+Backprojection  |      0.000      s |      0.001      s 
+Soft-NMS        |      0.000      s |      0.000      s 
+
+================================================================================
+BEST CONFIGURATION PER METRIC:
+  Best AP@[0.30:0.95]: grid-2x2-fov60 (0.219)
+  Best AP@0.50:       chiang-2021-baseline (0.310)
+  Best AP@0.75:       grid-2x2-fov60 (0.091)
+  Best Precision@0.5: chiang-2021-baseline (0.688)
+  Best Recall@0.5:    chiang-2021-baseline (0.390)
+  Best F1@0.5:        chiang-2021-baseline (0.498)
+  Fastest:            grid-2x2-fov60 (0.110s/image)
+================================================================================

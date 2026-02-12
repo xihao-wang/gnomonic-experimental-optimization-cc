@@ -700,17 +700,19 @@ def load_configuration():
     return custom_config
 
 
-def generate_composite_from_config(cfg_dict):
+def generate_composite_from_config(cfg_dict, fisheye_img=None):
     """
     Generate composite image from configuration dictionary (programmatic API).
 
     Args:
         cfg_dict: Dict with keys img_path, proj_nbr, fov_h, fov_v, latitude, lon_0, lon_step, grid, comp_sz, target_mp
+        fisheye_img: Optional numpy array of fisheye image (H, W, 3).
+                    If provided, uses this instead of loading from img_path.
 
     Returns:
         (resized_composite, metadata) where metadata includes mapping_matrices for backprojection
     """
-    img_path = cfg_dict["img_path"]
+    img_path = cfg_dict.get("img_path")
     proj_nbr = cfg_dict["proj_nbr"]
     fov_h = cfg_dict["fov_h"]
     fov_v = cfg_dict["fov_v"]
@@ -728,10 +730,13 @@ def generate_composite_from_config(cfg_dict):
     # Determine grid layout
     grid = determine_grid(proj_nbr, grid)
 
-    # Load fisheye image
-    fisheye_img = cv2.imread(img_path)
+    # Load fisheye image (if not provided)
     if fisheye_img is None:
-        raise FileNotFoundError(f"Could not load image at {img_path}")
+        if img_path is None:
+            raise ValueError("Either img_path or fisheye_img must be provided")
+        fisheye_img = cv2.imread(img_path)
+        if fisheye_img is None:
+            raise FileNotFoundError(f"Could not load image at {img_path}")
 
     # Fisheye parameters
     cx, cy = fisheye_img.shape[1] // 2, fisheye_img.shape[0] // 2

@@ -1,0 +1,46 @@
+================================================================================
+Metrics Evaluation Summary: BOMNI
+================================================================================
+
+Configuration: 2x2 Grid, 60deg FOV
+  ID: grid-2x2-fov60
+  Images: 245
+
+  Summary Metrics:
+    AP@[0.30:0.95]: 0.219
+    AP@0.50:       0.295
+    AP@0.75:       0.091
+    Precision@0.5: 0.480
+    Recall@0.5:    0.326
+    F1@0.5:        0.389
+
+  Timing (mean per image):
+    Total:          0.066s
+    Composite Gen:  0.035s
+    YOLO Detection: 0.030s
+    Backprojection: 0.000s
+    Soft-NMS:       0.000s
+
+--------------------------------------------------------------------------------
+
+Configuration: Chiang 2021 Baseline (8 proj, 2x4 grid)
+  ID: chiang-2021-baseline
+  Images: 245
+
+  Summary Metrics:
+    AP@[0.30:0.95]: 0.194
+    AP@0.50:       0.310
+    AP@0.75:       0.062
+    Precision@0.5: 0.688
+    Recall@0.5:    0.390
+    F1@0.5:        0.498
+
+  Timing (mean per image):
+    Total:          0.080s
+    Composite Gen:  0.041s
+    YOLO Detection: 0.038s
+    Backprojection: 0.000s
+    Soft-NMS:       0.000s
+
+--------------------------------------------------------------------------------
+
