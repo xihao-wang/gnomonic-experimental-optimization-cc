@@ -42,6 +42,7 @@ env/
 datasets/data/
 datasets/all-datasets/
 results/
+detection_pipeline/results/
 *.npy
 *.h5
 *.pkl
@@ -54,6 +55,15 @@ results/
 *.bmp
 *.gif
 *.tiff
+
+# Video files (too large for version control)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+*.webm
 
 # YOLO models (.pt files anywhere in subdirectories)
 *.pt

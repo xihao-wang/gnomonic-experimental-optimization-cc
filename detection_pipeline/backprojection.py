@@ -169,16 +169,15 @@ def build_radial_bbox(bbox_center: Tuple[float, float],
     sin_a = np.sin(radial_angle)
 
     # Build 4 corners in unrotated frame (centered at origin)
-    # Height along x-axis (radial direction after rotation)
-    # Width along y-axis (tangential direction after rotation)
+    # Width along x-axis, height along y-axis (standard OpenCV convention)
     half_width = width / 2
     half_height = height / 2
 
     corners_unrotated = np.array([
-        [-half_height, -half_width],  # Bottom-left
-        [ half_height, -half_width],  # Bottom-right
-        [ half_height,  half_width],  # Top-right
-        [-half_height,  half_width],  # Top-left
+        [-half_width, -half_height],  # Bottom-left
+        [ half_width, -half_height],  # Bottom-right
+        [ half_width,  half_height],  # Top-right
+        [-half_width,  half_height],  # Top-left
     ])
 
     # Rotate corners by radial angle

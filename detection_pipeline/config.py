@@ -85,16 +85,47 @@ _C.YOLO.DEVICE = None
 
 # ---- Detection Parameters ----
 
-# Confidence threshold for detections (0-1)
-# Detections below this threshold are discarded
-_C.YOLO.CONFIDENCE_THRESHOLD = 0.5  # 0.5
-
-# IoU threshold for Non-Maximum Suppression (NMS)
-# Controls how aggressively overlapping detections are merged
-_C.YOLO.IOU_THRESHOLD = 0.45  # 0.45
+# Confidence threshold for person class detections (0-1)
+# Initial filter to remove very weak detections before NMS stages
+_C.YOLO.CONFIDENCE_THRESHOLD = 0.25
 
 # Maximum number of detections to keep per image
 _C.YOLO.MAX_DETECTIONS = 300
+
+# ============================================================================
+# NMS: Non-Maximum Suppression Configuration
+# ============================================================================
+
+_C.NMS = CN()
+
+# ---- Stage 1: Standard NMS on Composite Image ----
+_C.NMS.STAGE1 = CN()
+
+# Enable/disable Stage 1 NMS (applied on composite detections before backprojection)
+# Note: YOLO always applies internal NMS, this controls the threshold
+_C.NMS.STAGE1.ENABLED = True
+
+# IoU threshold for standard NMS on composite image
+# High threshold (0.8) keeps more bboxes since Stage 2 NMS follows
+_C.NMS.STAGE1.IOU_THRESHOLD = 0.8
+
+# ---- Stage 2: Soft-NMS on Fisheye Image ----
+_C.NMS.STAGE2 = CN()
+
+# Enable/disable Stage 2 Soft-NMS (applied on fisheye detections after backprojection)
+_C.NMS.STAGE2.ENABLED = True
+
+# Sigma parameter for Gaussian Soft-NMS: score ← score * exp((-IoU²)/sigma)
+# Literature suggests: 0.1 (aggressive), 0.2 (moderate), 0.4 (gentle)
+# Lower values suppress overlapping boxes more aggressively
+_C.NMS.STAGE2.SIGMA = 0.2
+
+# Score threshold for Soft-NMS (applied to decayed scores)
+# Detections with score below this threshold after Gaussian decay are discarded
+# Note: Scores are DECAYED by Soft-NMS, so threshold should be lower than initial confidence
+# Reasonable values: 0.2-0.4 (removes heavily penalized duplicates)
+# Suggested alternatives: 0.2, 0.3, 0.4, 0.5
+_C.NMS.STAGE2.SCORE_THRESHOLD = 0.3
 
 # ============================================================================
 # BACKPROJECTION: Fisheye Coordinate Transformation

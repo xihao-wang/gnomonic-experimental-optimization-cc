@@ -30,6 +30,7 @@ from image_composer.presets import get_preset  # presets.py imports from multi_p
 from detection_pipeline.config import get_cfg, get_cfg_as_dict
 from detection_pipeline.yolo_detector import YOLODetector
 from detection_pipeline.backprojection import backproject_detections, visualize_backprojection, visualize_bbox_lattice
+from detection_pipeline.nms import apply_stage1_nms, apply_stage2_nms
 
 
 class DetectionPipeline:
@@ -53,16 +54,28 @@ class DetectionPipeline:
 
     def _init_detector(self):
         """Initialize YOLO detector from config."""
+        # Use Stage 1 NMS threshold if enabled, otherwise use a default
+        stage1_iou = self.cfg.NMS.STAGE1.IOU_THRESHOLD if self.cfg.NMS.STAGE1.ENABLED else 0.45
+
         self.detector = YOLODetector(
             model_name=self.cfg.YOLO.MODEL,
             device=self.cfg.YOLO.DEVICE,
             confidence_threshold=self.cfg.YOLO.CONFIDENCE_THRESHOLD,
-            iou_threshold=self.cfg.YOLO.IOU_THRESHOLD,
+            iou_threshold=stage1_iou,
             max_detections=self.cfg.YOLO.MAX_DETECTIONS
         )
 
         if self.cfg.VERBOSE:
             print(f"Initialized {self.detector}")
+            if self.cfg.NMS.STAGE1.ENABLED:
+                print(f"Stage 1 NMS: Enabled (IoU threshold: {self.cfg.NMS.STAGE1.IOU_THRESHOLD})")
+            else:
+                print(f"Stage 1 NMS: Disabled")
+            if self.cfg.NMS.STAGE2.ENABLED:
+                print(f"Stage 2 Soft-NMS: Enabled (sigma: {self.cfg.NMS.STAGE2.SIGMA}, "
+                      f"score threshold: {self.cfg.NMS.STAGE2.SCORE_THRESHOLD})")
+            else:
+                print(f"Stage 2 Soft-NMS: Disabled")
 
     def _build_projection_config(self):
         """
@@ -156,7 +169,9 @@ class DetectionPipeline:
         detections = self.detector.detect(composite_image, class_filter="person")
 
         if self.cfg.VERBOSE:
-            print(f"    ✓ Found {len(detections)} detections")
+            print(f"    ✓ Found {len(detections)} detections (after YOLO internal NMS)")
+            if self.cfg.NMS.STAGE1.ENABLED:
+                print(f"    (Stage 1 NMS applied by YOLO with IoU threshold: {self.cfg.NMS.STAGE1.IOU_THRESHOLD})")
             for i, det in enumerate(detections):
                 print(f"      [{i}] {det['class_name']} at ({det['x']:.3f}, {det['y']:.3f}), "
                       f"conf={det['confidence']:.3f}")
@@ -184,7 +199,26 @@ class DetectionPipeline:
                     for i, bbox in enumerate(fisheye_bboxes):
                         num_lattice = len(bbox.get('lattice_points', []))
                         print(f"      [{i}] {bbox['class_name']} at center ({bbox['center'][0]:.1f}, {bbox['center'][1]:.1f}), "
-                              f"angle={bbox['angle']:.1f}°, lattice: {num_lattice} points")
+                              f"angle={bbox['angle']:.1f}°, conf={bbox.get('confidence', 0):.3f}, lattice: {num_lattice} points")
+
+                # Apply Stage 2 Soft-NMS if enabled
+                if self.cfg.NMS.STAGE2.ENABLED and len(fisheye_bboxes) > 0:
+                    if self.cfg.VERBOSE:
+                        print(f"    Applying Stage 2 Soft-NMS (sigma={self.cfg.NMS.STAGE2.SIGMA}, "
+                              f"threshold={self.cfg.NMS.STAGE2.SCORE_THRESHOLD})...")
+
+                    fisheye_bboxes_before = len(fisheye_bboxes)
+                    fisheye_bboxes = apply_stage2_nms(
+                        fisheye_bboxes,
+                        sigma=self.cfg.NMS.STAGE2.SIGMA,
+                        score_threshold=self.cfg.NMS.STAGE2.SCORE_THRESHOLD
+                    )
+
+                    if self.cfg.VERBOSE:
+                        print(f"    ✓ Stage 2 Soft-NMS: {fisheye_bboxes_before} → {len(fisheye_bboxes)} detections")
+                        for i, bbox in enumerate(fisheye_bboxes):
+                            print(f"      [{i}] {bbox['class_name']} at center ({bbox['center'][0]:.1f}, {bbox['center'][1]:.1f}), "
+                                  f"angle={bbox['angle']:.1f}°, conf={bbox.get('confidence', 0):.3f}")
 
         # Step 5: Save results
         results_dir = self._save_results(proj_cfg, composite_image, detections, metadata, fisheye_bboxes)
@@ -278,8 +312,19 @@ class DetectionPipeline:
             f.write("YOLO Configuration:\n")
             f.write(f"  Model: {self.cfg.YOLO.MODEL}\n")
             f.write(f"  Device: {self.detector.device}\n")
-            f.write(f"  Confidence Threshold: {self.cfg.YOLO.CONFIDENCE_THRESHOLD}\n")
-            f.write(f"  IoU Threshold: {self.cfg.YOLO.IOU_THRESHOLD}\n\n")
+            f.write(f"  Confidence Threshold: {self.cfg.YOLO.CONFIDENCE_THRESHOLD}\n\n")
+
+            f.write("NMS Configuration:\n")
+            f.write(f"  Stage 1 (Composite):\n")
+            f.write(f"    Enabled: {self.cfg.NMS.STAGE1.ENABLED}\n")
+            if self.cfg.NMS.STAGE1.ENABLED:
+                f.write(f"    IoU Threshold: {self.cfg.NMS.STAGE1.IOU_THRESHOLD}\n")
+            f.write(f"  Stage 2 (Fisheye Soft-NMS):\n")
+            f.write(f"    Enabled: {self.cfg.NMS.STAGE2.ENABLED}\n")
+            if self.cfg.NMS.STAGE2.ENABLED:
+                f.write(f"    Sigma: {self.cfg.NMS.STAGE2.SIGMA}\n")
+                f.write(f"    Score Threshold: {self.cfg.NMS.STAGE2.SCORE_THRESHOLD}\n")
+            f.write("\n")
 
             f.write("Detection Results:\n")
             f.write(f"  Total Pedestrians Detected: {len(detections)}\n\n")

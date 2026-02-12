@@ -1,0 +1,137 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{enumitem}
+
+\geometry{a4paper, margin=1in}
+
+\title{Rotated Rectangle IoU Computation}
+\author{Gnomonic Projection Pedestrian Detection Project}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This document describes the algorithm for computing the Intersection over Union (IoU) metric between two rotated bounding boxes in fisheye image coordinates. The implementation uses OpenCV's \texttt{rotatedRectangleIntersection} function for accurate polygon intersection computation.
+
+\section{Input Representation}
+
+Each rotated bounding box $\mathcal{B}$ is represented by:
+\begin{equation}
+\mathcal{B} = \left( (c_x, c_y), (w, h), \theta \right)
+\end{equation}
+where:
+\begin{itemize}[nosep]
+    \item $(c_x, c_y)$ -- center coordinates in image space
+    \item $(w, h)$ -- width and height of the tight-fit rotated rectangle
+    \item $\theta$ -- rotation angle in degrees
+\end{itemize}
+
+For two bounding boxes $\mathcal{B}_1$ and $\mathcal{B}_2$, we compute their intersection and union to obtain the IoU metric.
+
+\section{Algorithm}
+
+\subsection{Step 1: Compute Rectangle Areas}
+
+The area of each rotated rectangle is simply:
+\begin{align}
+A_1 &= w_1 \times h_1 \\
+A_2 &= w_2 \times h_2
+\end{align}
+
+\subsection{Step 2: Compute Intersection}
+
+Using OpenCV's \texttt{rotatedRectangleIntersection}, we determine the intersection type and geometry:
+\begin{equation}
+\text{intersectionType}, \mathcal{P}_{\text{int}} = \text{rotatedRectangleIntersection}(\mathcal{B}_1, \mathcal{B}_2)
+\end{equation}
+
+where $\mathcal{P}_{\text{int}}$ is the set of vertices defining the intersection polygon (if it exists).
+
+The intersection type can be:
+\begin{itemize}[nosep]
+    \item \textbf{NONE}: No intersection exists $\Rightarrow$ IoU $= 0$
+    \item \textbf{FULL}: One rectangle is fully contained within the other
+    \item \textbf{PARTIAL}: Rectangles partially overlap
+\end{itemize}
+
+\subsection{Step 3: Compute Intersection Area}
+
+\subsubsection{Case 1: No Intersection}
+\begin{equation}
+A_{\text{int}} = 0 \quad \Rightarrow \quad \text{IoU} = 0
+\end{equation}
+
+\subsubsection{Case 2: Full Containment}
+
+When one rectangle is fully inside the other, the intersection area equals the area of the smaller rectangle:
+\begin{equation}
+A_{\text{int}} = \min(A_1, A_2)
+\end{equation}
+
+The union area is the area of the larger rectangle:
+\begin{equation}
+A_{\text{union}} = \max(A_1, A_2)
+\end{equation}
+
+Thus:
+\begin{equation}
+\text{IoU} = \frac{\min(A_1, A_2)}{\max(A_1, A_2)}
+\end{equation}
+
+\subsubsection{Case 3: Partial Overlap}
+
+For partial overlap, we compute the area of the intersection polygon using the contour area formula:
+\begin{equation}
+A_{\text{int}} = \text{contourArea}(\mathcal{P}_{\text{int}})
+\end{equation}
+
+where $\mathcal{P}_{\text{int}} = \{(x_0, y_0), (x_1, y_1), \ldots, (x_{n-1}, y_{n-1})\}$ is the ordered set of polygon vertices.
+
+The contour area is computed using the Shoelace formula:
+\begin{equation}
+A_{\text{int}} = \frac{1}{2} \left| \sum_{i=0}^{n-1} (x_i y_{i+1} - x_{i+1} y_i) \right|
+\end{equation}
+where indices are taken modulo $n$.
+
+\subsection{Step 4: Compute Union Area}
+
+The union area is computed as:
+\begin{equation}
+A_{\text{union}} = A_1 + A_2 - A_{\text{int}}
+\end{equation}
+
+\subsection{Step 5: Compute IoU}
+
+Finally, the Intersection over Union metric is:
+\begin{equation}
+\text{IoU} = \frac{A_{\text{int}}}{A_{\text{union}}} = \frac{A_{\text{int}}}{A_1 + A_2 - A_{\text{int}}}
+\end{equation}
+
+The result is clamped to the range $[0, 1]$ to handle numerical precision issues:
+\begin{equation}
+\text{IoU} = \max\left(0, \min\left(1, \frac{A_{\text{int}}}{A_{\text{union}}}\right)\right)
+\end{equation}
+
+\section{Edge Cases}
+
+\begin{enumerate}[nosep]
+    \item If $A_{\text{union}} \leq 0$ (degenerate rectangles), we return IoU $= 0$.
+    \item If the intersection polygon has fewer than 3 vertices, we return IoU $= 0$.
+    \item Any computational errors (invalid bbox format, numerical issues) return IoU $= 0$.
+\end{enumerate}
+
+\section{Implementation Notes}
+
+\begin{itemize}[nosep]
+    \item All bounding boxes must be in the same coordinate system (fisheye image coordinates).
+    \item Rotation angles are in degrees, following OpenCV convention.
+    \item The implementation uses OpenCV's optimized C++ backend for polygon intersection.
+    \item Numerical stability is ensured through clamping and error handling.
+\end{itemize}
+
+\end{document}

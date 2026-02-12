@@ -20,8 +20,8 @@ class YOLODetector:
     The model version is determined by the model_name parameter.
     """
 
-    def __init__(self, model_name="yolov8n.pt", device=None, confidence_threshold=0.5,
-                 iou_threshold=0.45, max_detections=300):
+    def __init__(self, model_name="yolov8n.pt", device=None, confidence_threshold=0.05,
+                 iou_threshold=0.8, max_detections=300):
         """
         Initialize YOLO detector.
 
@@ -34,7 +34,9 @@ class YOLODetector:
             device (str or None): Device to run on: "cuda", "cpu", or None for auto-detect
                                  If None, uses GPU if available, else CPU
             confidence_threshold (float): Confidence threshold for detections (0-1)
-            iou_threshold (float): IoU threshold for NMS (0-1)
+                                         Low value (0.05) to catch all potential persons before NMS
+            iou_threshold (float): IoU threshold for Stage 1 NMS (0-1)
+                                  High value (0.8) keeps more boxes since Stage 2 NMS follows
             max_detections (int): Maximum number of detections to keep
         """
         self.model_name = model_name
