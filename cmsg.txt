@@ -1,13 +1,8 @@
-feat: implement Phase 5 metrics evaluation system for projection config comparison
+refactor: reorganize datasets module structure and add cleanup instruction
 
-- Add comprehensive metrics evaluation with per-image IoU matching at 14 IOU thresholds (0.30-0.95)
-- Implement dataset-level aggregation with AP calculation using 11-point interpolation (PASCAL VOC style)
-- Generate precision-recall curves for each configuration at each IoU threshold
-- Add pipeline timing measurements for 5 stages: composite gen, YOLO, backprojection, soft-NMS, total end-to-end
-- Create automatic comparison tables and summary reports identifying best configuration based on computed metric values
-- Integrate optional timing support into detection pipeline (backward compatible, zero overhead when disabled)
-- Support pre-loaded fisheye images in composite generation for efficiency
-- Centralize all editable parameters in config.py (projection configs, YOLO model, datasets, IoU thresholds, output settings)
-- Generate versioned session folders with full reproducibility (metrics, timing, PR curves, config snapshot)
-- Test successfully on 245 BOMNI images. More Dataset handles will be added later.
-- Update relevant README files
+- Move manager classes and config to datasets/lib/ subfolder (base_manager, bomni_manager, piropo_manager, config)
+- Keep only entry point scripts at module root (prepare_dataset_step1.py, prepare_dataset_step2.py)
+- Update imports across 4 files to use datasets.lib namespace
+- Remove temporary test script (test_dataset_managers.py)
+- Add tip #16 to CLAUDE.md: clean up temporary test files after testing
+- Apply global module structure rule: entry points at root, utilities in lib/utils subfolders

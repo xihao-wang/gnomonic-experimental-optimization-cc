@@ -42,9 +42,9 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from datasets.config import get_cfg
-from datasets.bomni_manager import BOMNIManager
-from datasets.piropo_manager import PIROPOManager
+from datasets.lib.config import get_cfg
+from datasets.lib.bomni_manager import BOMNIManager
+from datasets.lib.piropo_manager import PIROPOManager
 
 
 # ============================================================================
