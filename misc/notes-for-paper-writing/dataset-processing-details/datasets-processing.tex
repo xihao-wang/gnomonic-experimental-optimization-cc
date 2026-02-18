@@ -21,6 +21,21 @@
 
 This document describes the unified processing pipeline applied to BOMNI~\cite{bomni2014} and PIROPO~\cite{piropo2014} datasets for evaluating projection configurations in fisheye pedestrian detection. Both datasets use rotated bounding box annotations provided by Tamura et al.~\cite{tamura2019omnidirectional}. Our processing follows a consistent two-step workflow with manual quality verification to ensure evaluation integrity.
 
+\subsection{Acronyms and Abbreviations}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{AP}: Average Precision
+    \item \textbf{BOMNI}: Bogazici Omni-directional and Multi-Camera Network Images
+    \item \textbf{COCO}: Common Objects in Context (object detection benchmark dataset)
+    \item \textbf{GT}: Ground Truth
+    \item \textbf{IoU}: Intersection over Union
+    \item \textbf{PIROPO}: People in Indoor ROoms with Perspective and Omnidirectional cameras
+    \item \textbf{TBD}: To Be Determined (values pending manual verification completion)
+    \item \textbf{VOC}: Visual Object Classes (Pascal VOC annotation format)
+    \item \textbf{XML}: eXtensible Markup Language
+    \item \textbf{JSON}: JavaScript Object Notation
+\end{itemize}
+
 \section{Common Processing Pipeline}
 
 Both BOMNI and PIROPO undergo identical processing steps, ensuring methodological consistency for fair cross-dataset comparison.

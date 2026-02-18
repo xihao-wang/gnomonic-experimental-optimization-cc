@@ -1,10 +1,10 @@
-docs: add comprehensive dataset processing documentation for BOMNI and PIROPO
+feat: implement PIROPO dataset preparation Step 1 pipeline
 
-- Create unified documentation covering both datasets in single LaTeX file
-- Document common two-step processing pipeline (automated prep + manual verification)
-- Explain Tamura annotation format limitation (missing explicit rotation angle)
-- Justify conversion to standard JSON with precomputed angles (eliminates ~309k redundant arctan2 calculations for PIROPO)
-- Document exclusion decisions: perspective cameras, unannotated sequences, empty BG frames
-- Explain camera/sequence aggregation strategy and statistical rationale
-- Include cross-dataset comparison table (BOMNI vs PIROPO characteristics)
-- Add computational savings analysis and performance optimization justification
+- Execute full Step 1/2 pipeline on PIROPO dataset (3,089 frames), which requires four steps:
+  - Step 1: Skip frame extraction (frames pre-extracted, no videos)
+  - Step 2: Copy annotated frames from source to PIROPO-step1/ (3,089 frames)
+  - Step 3: Convert Tamura XML to standard JSON (3,550 annotations)
+  - Step 4: Generate visualization images for manual quality review (3,089 images)
+- Output: datasets/all-datasets/PIROPO-step1/ ready for manual review
+
+Author: Yassir Zardoua <y.zardoua@caplogy.com>
