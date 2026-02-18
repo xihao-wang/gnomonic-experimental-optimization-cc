@@ -49,7 +49,7 @@ from datasets.lib.piropo_manager import PIROPOManager
 # CONFIGURATION: Select dataset (MUST MATCH STEP 1)
 # ============================================================================
 
-DATASET_NAME = "bomni"  # Options: "bomni", "piropo"
+DATASET_NAME = "piropo"  # Options: "bomni", "piropo"
 
 
 # ============================================================================
@@ -91,11 +91,11 @@ def main():
 
     fisheye_center = (dataset_cfg.FISHEYE_CENTER_X, dataset_cfg.FISHEYE_CENTER_Y)
 
-    # Build output paths
+    # Build output paths from config
     base_dir = Path("datasets/all-datasets") / dataset_cfg.TARGET_NAME
-    frames_dir = base_dir / "frames" / "scenario1"
-    annotations_dir = base_dir / "Standard-annotations" / "scenario1"
-    # Visualizations are nested: visualizations/bomni/annotation_visualization/{sequence}/
+    frames_dir = base_dir / dataset_cfg.FRAMES_SUBPATH if dataset_cfg.FRAMES_SUBPATH else base_dir
+    annotations_dir = base_dir / dataset_cfg.ANNOTATIONS_SUBPATH
+    # Visualizations are nested: visualizations/{dataset}/annotation_visualization/
     visualizations_dir = base_dir / "visualizations" / DATASET_NAME / "annotation_visualization"
 
     print(f"\nConfiguration:")
@@ -103,7 +103,10 @@ def main():
     print(f"  Visualization directory: {visualizations_dir}")
     print(f"  Annotations directory: {annotations_dir}")
     print(f"  Frames directory: {frames_dir}")
-    print(f"  Sequences: {dataset_cfg.SEQUENCES}")
+    if hasattr(dataset_cfg, 'SEQUENCES'):
+        print(f"  Sequences: {dataset_cfg.SEQUENCES}")
+    if hasattr(dataset_cfg, 'ROOMS'):
+        print(f"  Rooms: {dataset_cfg.ROOMS}")
 
     # Verify paths exist
     if not visualizations_dir.exists():
@@ -131,12 +134,20 @@ def main():
 
     input("\nPress Enter to continue or Ctrl+C to abort...")
 
-    manager.cleanup_incorrect_annotations(
-        visualization_dir=str(visualizations_dir),
-        annotations_dir=str(annotations_dir),
-        frames_dir=str(frames_dir),
-        sequences=dataset_cfg.SEQUENCES
-    )
+    if DATASET_NAME == "bomni":
+        manager.cleanup_incorrect_annotations(
+            visualization_dir=str(visualizations_dir),
+            annotations_dir=str(annotations_dir),
+            frames_dir=str(frames_dir),
+            sequences=dataset_cfg.SEQUENCES
+        )
+    elif DATASET_NAME == "piropo":
+        manager.cleanup_incorrect_annotations(
+            visualization_dir=str(visualizations_dir),
+            annotations_dir=str(annotations_dir),
+            frames_dir=str(frames_dir),
+            rooms=dataset_cfg.ROOMS
+        )
 
     # Step 7: Regenerate final clean visualizations
     print("\n" + "=" * 80)
@@ -149,14 +160,24 @@ def main():
     if viz_base_dir.exists():
         shutil.rmtree(viz_base_dir)
 
-    manager.visualize_annotations(
-        annotations_dir=str(annotations_dir),
-        frames_dir=str(frames_dir),
-        sequences=dataset_cfg.SEQUENCES,
-        max_images="all",
-        output_dir=str(viz_base_dir),
-        fisheye_center=fisheye_center
-    )
+    if DATASET_NAME == "bomni":
+        manager.visualize_annotations(
+            annotations_dir=str(annotations_dir),
+            frames_dir=str(frames_dir),
+            sequences=dataset_cfg.SEQUENCES,
+            max_images="all",
+            output_dir=str(viz_base_dir),
+            fisheye_center=fisheye_center
+        )
+    elif DATASET_NAME == "piropo":
+        manager.visualize_annotations(
+            annotations_dir=str(annotations_dir),
+            frames_dir=str(frames_dir),
+            rooms=dataset_cfg.ROOMS,
+            max_images="all",
+            output_dir=str(viz_base_dir),
+            fisheye_center=fisheye_center
+        )
 
     # Final summary
     print("\n" + "=" * 80)

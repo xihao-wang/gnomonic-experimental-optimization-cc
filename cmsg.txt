@@ -1,10 +1,8 @@
-feat: implement PIROPO dataset preparation Step 1 pipeline
+feat: complete PIROPO dataset preparation Step 2
 
-- Execute full Step 1/2 pipeline on PIROPO dataset (3,089 frames), which requires four steps:
-  - Step 1: Skip frame extraction (frames pre-extracted, no videos)
-  - Step 2: Copy annotated frames from source to PIROPO-step1/ (3,089 frames)
-  - Step 3: Convert Tamura XML to standard JSON (3,550 annotations)
-  - Step 4: Generate visualization images for manual quality review (3,089 images)
-- Output: datasets/all-datasets/PIROPO-step1/ ready for manual review
+- Make prepare_dataset_step2.py dataset-aware for PIROPO hierarchical structure
+- Execute Step 2 cleanup: remove annotations and frames based on deleted visualizations
+- Final PIROPO dataset: 3,004 frames (85 deleted, 2.75% error rate vs BOMNI 25.5%)
+- Output: datasets/all-datasets/PIROPO-production/ ready for evaluation
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>
