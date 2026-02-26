@@ -45,13 +45,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from datasets.lib.config import get_cfg
 from datasets.lib.bomni_manager import BOMNIManager
 from datasets.lib.piropo_manager import PIROPOManager
+from datasets.lib.cepdof_manager import CEPDOFManager
 
 
 # ============================================================================
 # CONFIGURATION: Select dataset to prepare
 # ============================================================================
 
-DATASET_NAME = "piropo"  # Options: "bomni", "piropo"
+DATASET_NAME = "cepdof"  # Options: "bomni", "piropo", "cepdof"
 
 
 # ============================================================================
@@ -64,6 +65,8 @@ def get_manager_for_dataset(dataset_name: str, cfg):
         return BOMNIManager(cfg)
     elif dataset_name == "piropo":
         return PIROPOManager(cfg)
+    elif dataset_name == "cepdof":
+        return CEPDOFManager(cfg)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
@@ -90,10 +93,16 @@ def main():
         dataset_cfg = cfg.BOMNI
     elif DATASET_NAME == "piropo":
         dataset_cfg = cfg.PIROPO
+    elif DATASET_NAME == "cepdof":
+        dataset_cfg = cfg.CEPDOF
     else:
         raise ValueError(f"Unknown dataset: {DATASET_NAME}")
 
-    fisheye_center = (dataset_cfg.FISHEYE_CENTER_X, dataset_cfg.FISHEYE_CENTER_Y)
+    # CEPDOF uses per-image auto-computed center; use None here
+    if dataset_cfg.FISHEYE_CENTER_X == -1.0:
+        fisheye_center = None
+    else:
+        fisheye_center = (dataset_cfg.FISHEYE_CENTER_X, dataset_cfg.FISHEYE_CENTER_Y)
 
     # Build output paths from config
     base_dir = Path("datasets/all-datasets") / dataset_cfg.TARGET_NAME
@@ -128,8 +137,8 @@ def main():
             output_dir=str(frames_dir),
             sequences=dataset_cfg.SEQUENCES
         )
-    elif DATASET_NAME == "piropo":
-        print("Skipping frame extraction (PIROPO frames already available)")
+    elif DATASET_NAME in ("piropo", "cepdof"):
+        manager.extract_frames()
 
     # Step 2: Cleanup unannotated frames
     print("\n" + "=" * 80)
@@ -142,6 +151,12 @@ def main():
             sequences=dataset_cfg.SEQUENCES
         )
     elif DATASET_NAME == "piropo":
+        manager.cleanup_unannotated_frames(
+            frames_dir=str(frames_dir),
+            annotations_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            source_dir=dataset_cfg.FRAMES_SOURCE_DIR
+        )
+    elif DATASET_NAME == "cepdof":
         manager.cleanup_unannotated_frames(
             frames_dir=str(frames_dir),
             annotations_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
@@ -167,6 +182,12 @@ def main():
             rooms=dataset_cfg.ROOMS,
             fisheye_center=fisheye_center
         )
+    elif DATASET_NAME == "cepdof":
+        manager.convert_to_standard_format(
+            input_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            output_dir=str(annotations_dir),
+            sequences=dataset_cfg.SEQUENCES
+        )
 
     # Step 4: Generate visualizations for manual review
     print("\n" + "=" * 80)
@@ -187,6 +208,17 @@ def main():
             frames_dir=str(frames_dir),
             rooms=dataset_cfg.ROOMS,
             max_images="all",
+            output_dir=str(visualizations_dir),
+            fisheye_center=fisheye_center
+        )
+    elif DATASET_NAME == "cepdof":
+        max_viz = None if dataset_cfg.MAX_VISUALIZATIONS_PER_SEQUENCE == -1 else dataset_cfg.MAX_VISUALIZATIONS_PER_SEQUENCE
+        manager.visualize_annotations(
+            annotations_dir=str(annotations_dir),
+            frames_dir=str(frames_dir),
+            sequences=dataset_cfg.SEQUENCES,
+            max_images=max_viz,
+            spread=dataset_cfg.SPREAD_VISUALIZATIONS,
             output_dir=str(visualizations_dir),
             fisheye_center=fisheye_center
         )

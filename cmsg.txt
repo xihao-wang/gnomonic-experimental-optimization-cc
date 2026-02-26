@@ -1,8 +1,19 @@
-feat: complete PIROPO dataset preparation Step 2
+feat: add CEPDOF dataset support and spread visualization sampling
 
-- Make prepare_dataset_step2.py dataset-aware for PIROPO hierarchical structure
-- Execute Step 2 cleanup: remove annotations and frames based on deleted visualizations
-- Final PIROPO dataset: 3,004 frames (85 deleted, 2.75% error rate vs BOMNI 25.5%)
-- Output: datasets/all-datasets/PIROPO-production/ ready for evaluation
+CEPDOF dataset integration:
+- Add CEPDOFManager with direct conversion from COCO-like [cx,cy,w,h,d] JSON
+  to standard per-frame JSON (no trigonometric derivation needed, angle explicit)
+- Normalize w<=h constraint and d in [-90,+90] once at conversion time
+- Add cleanup_unannotated_frames() to copy only annotated frames (25,504 total,
+  ~146 unannotated frames skipped)
+- Wire CEPDOF into prepare_dataset_step1.py alongside BOMNI and PIROPO
+
+Spread visualization sampling (applies to all datasets):
+- Add spread parameter to base_manager.visualize_annotations()
+- When enabled, samples frames evenly across the full sequence
+  (step = total / max) instead of taking the first N consecutive frames
+- Configurable via CEPDOF.SPREAD_VISUALIZATIONS (True/False) in config.py
+- CEPDOF.MAX_VISUALIZATIONS_PER_SEQUENCE controls sample size (default: 100)
+- Set MAX_VISUALIZATIONS_PER_SEQUENCE = -1 to visualize all frames
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>
