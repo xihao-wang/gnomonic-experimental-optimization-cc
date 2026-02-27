@@ -562,20 +562,108 @@ Check the timing.json file to see detection coverage:
 
 This is crucial for understanding low AP scores - configurations may be missing detections entirely on some images rather than just having poor localization.
 
+### Multi-Dataset Support
+
+The evaluation pipeline supports three datasets. Configure which to run in `evaluation/lib/config.py`:
+
+```python
+_C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]
+```
+
+Each dataset is evaluated independently. Results are stored in separate per-dataset folders under the session directory:
+
+```
+evaluation/metrics-evaluation/
+└── metrics_eval_session_N/
+    ├── metadata.txt
+    ├── projection_configs_snapshot.py
+    ├── bomni/           # BOMNI results (245 images)
+    │   ├── metrics.json
+    │   ├── timing.json
+    │   ├── summary.txt
+    │   ├── comparison_table.txt
+    │   ├── pr_curves/
+    │   └── visuals/
+    │       └── {config_id}/
+    │           ├── 00001_composite.jpg
+    │           └── 00001_fisheye.jpg
+    ├── piropo/          # PIROPO results (3,004 images)
+    └── cepdof/          # CEPDOF results (up to MAX_IMAGES, spread across 25,358)
+```
+
+### Sampling Configuration
+
+For large datasets (especially CEPDOF with 25K frames), configure:
+
+```python
+# In evaluation/lib/config.py
+
+# Limit images per dataset (None = all)
+_C.METRICS_EVALUATION.MAX_IMAGES = 3000
+
+# Spread samples evenly across full dataset instead of taking first N
+_C.METRICS_EVALUATION.SPREAD_SAMPLES = True
+```
+
+**How spread sampling works:**
+- `step = total / max_images`
+- `indices = [int(i * step) for i in range(max_images)]`
+- Frames are evenly distributed across the entire dataset (e.g., every 8th frame for 3000 of 25358)
+- If `max_images >= total`, all frames are used (no truncation)
+- Applied per dataset independently: BOMNI (245 frames) uses all even when MAX_IMAGES=3000
+
+### Visual Output
+
+Enable visual results for qualitative inspection:
+
+```python
+# In evaluation/lib/config.py
+_C.METRICS_EVALUATION.ENABLE_VISUALS = True
+```
+
+For each evaluated frame, two images are saved under `{session}/{dataset}/visuals/{config_id}/`:
+- `{idx:05d}_composite.jpg` — composite image with YOLO axis-aligned detections (green)
+- `{idx:05d}_fisheye.jpg` — fisheye image with GT rotated boxes (green) and backprojected predictions after Soft-NMS (yellow)
+
+Images are saved flat (no dataset hierarchy), one pair per frame.
+
+### Dataset Loaders
+
+| Dataset | Loader | Frames | Structure |
+|---------|--------|--------|-----------|
+| BOMNI | `evaluation/lib/bomni_dataset.py` | 245 | `scenario1/{sequence}/` |
+| PIROPO | `evaluation/lib/piropo_dataset.py` | 3,004 | `{Room}/{Camera}/{Camera}_{Seq}/` |
+| CEPDOF | `evaluation/lib/cepdof_dataset.py` | 25,358 | `{Sequence}/` |
+
+All loaders read standard JSON annotations (center_x, center_y, width, height, angle, class_name).
+
 ### Next Steps
 
 1. ~~**Implement evaluation metrics**~~ ✅ COMPLETE
 2. ~~**Integrate with detection pipeline**~~ ✅ COMPLETE
-3. **Configuration search** - Systematically test parameter ranges (Phase 6)
-4. **Add more datasets** - PIROPO, Mirror Worlds, CVRG (if needed)
+3. ~~**Add PIROPO and CEPDOF datasets**~~ ✅ COMPLETE
+4. **Configuration search** - Systematically test parameter ranges (Phase 6)
 
 ### Files in this Module
 
-- `config.py` - YACS configuration for evaluation
-- `bomni_dataset.py` - BOMNI dataset handler with rotated bbox support (runtime loader)
-- `visualize_datasets.py` - Multi-dataset visualization script
+Entry points (run directly):
+- `run_metrics_evaluation.py` - Run metrics evaluation across configurations
+- `run_projection_evaluation.py` - Run visual backprojection test
+- `visualize_datasets.py` - Visualize dataset annotations
+
+Library (imported by other modules, in `lib/`):
+- `lib/config.py` - YACS configuration for evaluation
+- `lib/bomni_dataset.py` - BOMNI runtime loader
+- `lib/piropo_dataset.py` - PIROPO runtime loader
+- `lib/cepdof_dataset.py` - CEPDOF runtime loader
+- `lib/dataset_registry.py` - Dataset metadata registry
+- `lib/metrics_evaluator_runner.py` - Metrics evaluation orchestrator
+- `lib/evaluator.py` - Per-image evaluation logic
+- `lib/aggregator.py` - Results aggregation + AP + PR curves
+- `lib/timing.py` - Pipeline timing utilities
+- `lib/visualization.py` - GT + predictions overlay
+- `lib/output_manager.py` - Versioned session folders
 - `README.md` - This file
-- `__init__.py` - Module initialization
 
 ### References
 
