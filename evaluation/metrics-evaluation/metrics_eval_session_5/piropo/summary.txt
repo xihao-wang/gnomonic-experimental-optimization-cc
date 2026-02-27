@@ -1,23 +1,23 @@
 ================================================================================
-Metrics Evaluation Summary: BOMNI
+Metrics Evaluation Summary: PIROPO
 ================================================================================
 
 Configuration: 2x2 Grid, 60deg FOV
   ID: grid-2x2-fov60
-  Images: 245
+  Images: 3000
 
   Summary Metrics:
-    AP@[0.30:0.95]: 0.219
-    AP@0.50:       0.295
-    AP@0.75:       0.091
-    Precision@0.5: 0.480
-    Recall@0.5:    0.326
-    F1@0.5:        0.389
+    AP@[0.30:0.95]: 0.323
+    AP@0.50:       0.545
+    AP@0.75:       0.092
+    Precision@0.5: 0.736
+    Recall@0.5:    0.605
+    F1@0.5:        0.664
 
   Timing (mean per image):
-    Total:          0.110s
-    Composite Gen:  0.054s
-    YOLO Detection: 0.055s
+    Total:          0.092s
+    Composite Gen:  0.033s
+    YOLO Detection: 0.059s
     Backprojection: 0.000s
     Soft-NMS:       0.000s
 
@@ -25,21 +25,21 @@ Configuration: 2x2 Grid, 60deg FOV
 
 Configuration: Chiang 2021 Baseline (8 proj, 2x4 grid)
   ID: chiang-2021-baseline
-  Images: 245
+  Images: 3000
 
   Summary Metrics:
-    AP@[0.30:0.95]: 0.194
-    AP@0.50:       0.310
-    AP@0.75:       0.062
-    Precision@0.5: 0.688
-    Recall@0.5:    0.390
-    F1@0.5:        0.498
+    AP@[0.30:0.95]: 0.430
+    AP@0.50:       0.626
+    AP@0.75:       0.265
+    Precision@0.5: 0.739
+    Recall@0.5:    0.692
+    F1@0.5:        0.715
 
   Timing (mean per image):
-    Total:          0.127s
-    Composite Gen:  0.058s
-    YOLO Detection: 0.068s
-    Backprojection: 0.001s
+    Total:          0.113s
+    Composite Gen:  0.051s
+    YOLO Detection: 0.061s
+    Backprojection: 0.000s
     Soft-NMS:       0.000s
 
 --------------------------------------------------------------------------------

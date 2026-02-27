@@ -9,7 +9,7 @@
 \DeclareMathOperator{\arctantwo}{arctan2}
 
 \title{Dataset Processing and Selection Rationale\\
-\large BOMNI and PIROPO Datasets for Fisheye Pedestrian Detection}
+\large BOMNI, PIROPO, and CEPDOF Datasets for Fisheye Pedestrian Detection}
 \author{Yassir Zardoua}
 \date{\today}
 
@@ -19,13 +19,14 @@
 
 \section{Introduction}
 
-This document describes the unified processing pipeline applied to BOMNI~\cite{bomni2014} and PIROPO~\cite{piropo2014} datasets for evaluating projection configurations in fisheye pedestrian detection. Both datasets use rotated bounding box annotations provided by Tamura et al.~\cite{tamura2019omnidirectional}. Our processing follows a consistent two-step workflow with manual quality verification to ensure evaluation integrity.
+This document describes the unified processing pipeline applied to BOMNI~\cite{bomni2014}, PIROPO~\cite{piropo2014}, and CEPDOF~\cite{cepdof2020} datasets for evaluating projection configurations in fisheye pedestrian detection. BOMNI and PIROPO use rotated bounding box annotations provided by Tamura et al.~\cite{tamura2019omnidirectional}; CEPDOF uses annotations from its original authors in COCO-like JSON format. Despite the different source formats, all three datasets are converted to the same standard JSON representation and follow the same two-step processing workflow with manual quality verification to ensure evaluation integrity.
 
 \subsection{Acronyms and Abbreviations}
 
 \begin{itemize}[leftmargin=*]
     \item \textbf{AP}: Average Precision
     \item \textbf{BOMNI}: Bogazici Omni-directional and Multi-Camera Network Images
+    \item \textbf{CEPDOF}: Challenging Events for Person Detection from Overhead Fisheye images
     \item \textbf{COCO}: Common Objects in Context (object detection benchmark dataset)
     \item \textbf{GT}: Ground Truth
     \item \textbf{IoU}: Intersection over Union
@@ -336,29 +337,117 @@ Following the same protocol as BOMNI:
     \item Expected error rate: 10--25\% (based on BOMNI experience)
 \end{enumerate}
 
+\section{CEPDOF Dataset Processing}
+
+\subsection{Dataset Overview}
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Source}: Challenging Events for Person Detection from Overhead Fisheye images~\cite{cepdof2020}
+    \item \textbf{Environment}: Single indoor classroom, overhead-mounted fisheye camera
+    \item \textbf{Resolution}: 2,048$\times$2,048 pixels (Lunch1--3, Edge\_cases) and 1,080$\times$1,080 pixels (High\_activity, All\_off, IRfilter, IRill)
+    \item \textbf{Fisheye center}: Image center (auto-computed as $width/2$, $height/2$)
+    \item \textbf{Sequences}: 8 videos covering diverse challenging scenarios (crowded scenes, body occlusions, unusual poses, low-light conditions)
+    \item \textbf{Scale}: 25,504 annotated frames, 173,074 person instances across all sequences
+\end{itemize}
+
+\subsection{Annotation Format}
+
+CEPDOF annotations follow a COCO-like JSON format, with one JSON file per video sequence. Each bounding box is represented as:
+\begin{equation}
+    \text{bbox} = [c_x,\ c_y,\ w,\ h,\ d]
+\end{equation}
+where $c_x, c_y$ are center coordinates, $w, h$ are width and height (constrained to $w \leq h$), and $d$ is the \textbf{clockwise rotation angle from the vertical axis} (pointing upward), in degrees, with $d \in [-90°, +90°]$.
+
+This is a direct, explicit representation --- no trigonometric derivation is needed. Conversion to our standard per-frame JSON format is a straightforward field mapping:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{CEPDOF field} & \textbf{Standard format field} \\
+\midrule
+$c_x$ & \texttt{center\_x} \\
+$c_y$ & \texttt{center\_y} \\
+$w$ & \texttt{width} \\
+$h$ & \texttt{height} \\
+$d$ & \texttt{angle} \\
+(always person) & \texttt{class\_name} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The $w \leq h$ constraint and angle clamping are normalized once during conversion so the pipeline never needs to handle them.
+
+\subsection{Distinction from BOMNI and PIROPO: Non-Radial Bounding Boxes}
+
+\textbf{Critical difference}: Unlike BOMNI and PIROPO, where Tamura enforces a \textit{radial alignment} constraint (the major axis of every bounding box points toward the fisheye center), CEPDOF annotations place \textbf{no such constraint}. Bounding boxes represent the actual body orientation of each person as observed from overhead, which may or may not be radially aligned.
+
+In BOMNI and PIROPO (Tamura format), the angle is entirely determined by the spatial position of the pedestrian relative to the fisheye center:
+\begin{equation}
+    \theta = \arctantwo(dx, -dy), \quad dx = c_x - f_x,\ dy = c_y - f_y
+\end{equation}
+This enforces that every annotated pedestrian's body axis points radially away from the camera. While this assumption holds approximately for standing pedestrians, it breaks for people walking tangentially, sitting, or in unusual poses.
+
+CEPDOF, by contrast, stores the independently observed angle $d$, which reflects the person's true body orientation regardless of their position in the image.
+
+\begin{quote}
+\textbf{Note on orientation convention and IoU}: The $w \leq h$ constraint introduces a 90° ambiguity in angle representation (swapping $w$ and $h$ and rotating by 90° produces the same physical rectangle). For IoU-based evaluation (mAP, precision, recall), this ambiguity is irrelevant: intersection and union surfaces depend only on the physical rectangle, not on its parametrization. As long as the bounding box correctly represents the physical region occupied by the pedestrian, the IoU computation is unaffected by which (w, h, $d$) parametrization is used. This ambiguity would only matter if the angle $d$ is directly evaluated as a target metric, which is not the case in our evaluation protocol.
+\end{quote}
+
+\subsection{Implications for Backprojection}
+
+The non-radial alignment of CEPDOF annotations has an important methodological consequence for our backprojection pipeline. Our current backprojection method forces the height axis of every backprojected bounding box to point radially toward the fisheye center --- a design choice inherited from the Tamura annotation convention of BOMNI and PIROPO.
+
+CEPDOF provides a natural testbed to investigate whether this radial alignment is beneficial or harmful:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Radially-aligned backprojection} (current): Assumes every detected pedestrian stands upright relative to the fisheye center. Simple and consistent with Tamura-annotated datasets.
+    \item \textbf{Free-orientation backprojection}: Preserves the detected orientation from the composite (perspective) image, transformed geometrically without forcing radial alignment.
+\end{itemize}
+
+Since CEPDOF ground truth does not enforce radial alignment, comparing these two backprojection strategies on CEPDOF will reveal whether the radial alignment assumption helps, hurts, or makes no significant difference in practice. This constitutes an additional experimental axis beyond projection configuration search.
+
+\subsection{Frame Filtering}
+
+CEPDOF provides annotations for nearly all frames: 25,358 out of 25,504 total frames are annotated (146 unannotated frames, typically empty scenes). Our preparation pipeline copies only annotated frames to the production folder, discarding the 146 unannotated ones.
+
+\subsection{Manual Verification}
+
+CEPDOF annotations are produced by the original dataset authors (Boston University VIP Laboratory) using spatiotemporal tracking, which generally yields higher consistency than the third-party Tamura annotations used for BOMNI and PIROPO. Nevertheless, we apply the same manual verification protocol for methodological consistency:
+
+\begin{enumerate}[leftmargin=*]
+    \item Sample $N$ frames per sequence (evenly spread across the full sequence to ensure representative coverage)
+    \item Visually inspect rotated bounding box overlays
+    \item Delete visualization images for frames with incorrect annotations
+    \item Run automated cleanup to remove corresponding annotation and frame files
+\end{enumerate}
+
+\textbf{Sampling strategy}: Given the large scale of CEPDOF (25,358 frames), reviewing all frames is impractical. We therefore sample a configurable number of frames per sequence (default: 100) using uniform stride $s = \lfloor N_{\text{total}} / N_{\text{sample}} \rfloor$, ensuring that selected frames span the entire sequence rather than clustering at the beginning.
+
 \section{Cross-Dataset Comparison}
 
 \begin{table}[h]
 \centering
-\begin{tabular}{@{}lcc@{}}
+\begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Characteristic} & \textbf{BOMNI} & \textbf{PIROPO} \\
+\textbf{Characteristic} & \textbf{BOMNI} & \textbf{PIROPO} & \textbf{CEPDOF} \\
 \midrule
-Cameras (fisheye) & 1 & 4 \\
-Sequences per camera & 4 & 3 \\
-Resolution & 640$\times$480 & 800$\times$600 \\
-Fisheye center & (320, 240) & (400, 300) \\
-Initial annotations & 337 & 3,089 \\
-Person instances (initial) & 1,122 & 3,550 \\
-Verified frames & 245 & TBD \\
-Annotation error rate & 25.5\% & TBD \\
-Environment & Single room & 2 rooms \\
-Scene complexity & Uniform background & Cluttered (Room B) \\
+Cameras (fisheye) & 1 & 4 & 1 \\
+Sequences & 4 & 12 & 8 \\
+Resolution & 640$\times$480 & 800$\times$600 & 2048$\times$2048 / 1080$\times$1080 \\
+Fisheye center & (320, 240) & (400, 300) & auto (image center) \\
+Annotated frames & 337 & 3,089 & 25,358 \\
+Person instances & 1,122 & 3,550 & 173,074 \\
+Verified frames & 245 & 3,004 & TBD \\
+Annotation error rate & 25.5\% & 2.75\% & TBD \\
+Annotation source & Tamura et al. & Tamura et al. & Original authors \\
+Annotation format & Tamura XML & Tamura XML & COCO JSON \\
+Radial alignment & Enforced & Enforced & Free (actual body orientation) \\
+Environment & Single room & 2 rooms & Single classroom \\
+Scene complexity & Uniform & Cluttered & Crowded, low-light, occlusion \\
 \midrule
-\textbf{Processing pipeline} & \multicolumn{2}{c}{\textbf{Identical}} \\
+\textbf{Processing pipeline} & \multicolumn{3}{c}{\textbf{Identical (two-step with manual verification)}} \\
 \bottomrule
 \end{tabular}
-\caption{BOMNI vs. PIROPO dataset characteristics. Both follow the same two-step processing workflow with manual verification.}
+\caption{Cross-dataset comparison. All three datasets follow the same two-step processing workflow with manual verification.}
 \end{table}
 
 \section{Methodological Consistency and Fair Evaluation}
@@ -405,8 +494,9 @@ Both BOMNI and PIROPO datasets undergo rigorous two-step processing with manual 
 
 Final production datasets contain only verified correct annotations:
 \begin{itemize}[leftmargin=*]
-    \item \textbf{BOMNI-production}: 245 frames, 834 person instances
-    \item \textbf{PIROPO} (post-verification): TBD frames ($\sim$2,300--2,700 expected)
+    \item \textbf{BOMNI-production}: 245 frames, 834 person instances (25.5\% error rate)
+    \item \textbf{PIROPO-production}: 3,004 frames, 3,465 person instances (2.75\% error rate)
+    \item \textbf{CEPDOF-production}: TBD frames (pending manual verification), $\sim$173,000 person instances
 \end{itemize}
 
 This methodological rigor ensures evaluation metrics reflect true projection configuration performance rather than annotation noise or processing inconsistencies.
@@ -424,6 +514,11 @@ Gonzalez-Mora, J., et al.
 \textit{PIROPO Database: People in Indoor ROoms with Perspective and Omnidirectional cameras}.
 PIROPO Project, 2014.
 \url{https://sites.google.com/site/piropodatabase/}
+
+\bibitem{cepdof2020}
+Duan, Z., Tezcan, M.O., Nakamura, H., Ishwar, P., and Konrad, J.
+\textit{RAPiD: Rotation-Aware People Detection in Overhead Fisheye Images}.
+IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), OmniCV Workshop, 2020.
 
 \bibitem{tamura2019omnidirectional}
 Tamura, M., Horiguchi, S., and Murakami, T.

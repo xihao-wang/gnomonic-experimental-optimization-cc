@@ -2,10 +2,10 @@
 Metrics Evaluation Session Metadata
 ================================================================================
 Session ID: metrics_eval_session_5
-Date: 2026-02-12 15:55:00
+Date: 2026-02-27 15:32:58
 
 YOLO Model: models/yolov8m.pt
-Dataset: BOMNI (245 images processed)
+Dataset: CEPDOF (3000 images processed of 25358 total)
 
 Projection Configurations Evaluated:
   1. grid-2x2-fov60 (2x2 Grid, 60deg FOV)

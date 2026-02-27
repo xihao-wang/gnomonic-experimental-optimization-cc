@@ -1,19 +1,22 @@
-feat: add CEPDOF dataset support and spread visualization sampling
+feat: add PIROPO/CEPDOF evaluation loaders, spread sampling, and visual output
 
-CEPDOF dataset integration:
-- Add CEPDOFManager with direct conversion from COCO-like [cx,cy,w,h,d] JSON
-  to standard per-frame JSON (no trigonometric derivation needed, angle explicit)
-- Normalize w<=h constraint and d in [-90,+90] once at conversion time
-- Add cleanup_unannotated_frames() to copy only annotated frames (25,504 total,
-  ~146 unannotated frames skipped)
-- Wire CEPDOF into prepare_dataset_step1.py alongside BOMNI and PIROPO
+Dataset loaders for evaluation:
+- Add piropo_dataset.py: loads 3,004 annotated fisheye frames across 2 rooms and
+  4 cameras (Room_A: omni_1A/2A/3A, Room_B: omni_1B), auto-discovers hierarchy
+- Add cepdof_dataset.py: loads 25,358 annotated overhead fisheye frames across
+  8 challenging sequences (Lunch, Edge cases, High activity, IR conditions)
+- Both use the unified standard JSON format (center_x/y, width, height, angle)
+- Register both in dataset_registry.py and wire into metrics runner and config
 
-Spread visualization sampling (applies to all datasets):
-- Add spread parameter to base_manager.visualize_annotations()
-- When enabled, samples frames evenly across the full sequence
-  (step = total / max) instead of taking the first N consecutive frames
-- Configurable via CEPDOF.SPREAD_VISUALIZATIONS (True/False) in config.py
-- CEPDOF.MAX_VISUALIZATIONS_PER_SEQUENCE controls sample size (default: 100)
-- Set MAX_VISUALIZATIONS_PER_SEQUENCE = -1 to visualize all frames
+Spread sampling for better representativity of data:
+- Evaluation runner now samples frames evenly across the full dataset
+  (step = total / max_images) instead of taking the first N consecutive frames
+- Controlled by SPREAD_SAMPLES flag in config; MAX_IMAGES applied per dataset
+
+Visual output for qualitative inspection:
+- New ENABLE_VISUALS flag saves one image pair per evaluated frame:
+  composite image with YOLO detections, and fisheye image with GT boxes (green)
+  and backprojected predictions after Soft-NMS (yellow)
+- Saved flat (no dataset hierarchy) under {session}/{dataset}/visuals/{config_id}/
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

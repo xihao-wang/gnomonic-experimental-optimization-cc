@@ -212,16 +212,20 @@ def main():
             fisheye_center=fisheye_center
         )
     elif DATASET_NAME == "cepdof":
-        max_viz = None if dataset_cfg.MAX_VISUALIZATIONS_PER_SEQUENCE == -1 else dataset_cfg.MAX_VISUALIZATIONS_PER_SEQUENCE
-        manager.visualize_annotations(
-            annotations_dir=str(annotations_dir),
-            frames_dir=str(frames_dir),
-            sequences=dataset_cfg.SEQUENCES,
-            max_images=max_viz,
-            spread=dataset_cfg.SPREAD_VISUALIZATIONS,
-            output_dir=str(visualizations_dir),
-            fisheye_center=fisheye_center
-        )
+        max_viz = dataset_cfg.MAX_VISUALIZATIONS_PER_SEQUENCE
+        if max_viz == 0:
+            print("Skipping visualization (MAX_VISUALIZATIONS_PER_SEQUENCE = 0)")
+        else:
+            max_viz = None if max_viz == -1 else max_viz
+            manager.visualize_annotations(
+                annotations_dir=str(annotations_dir),
+                frames_dir=str(frames_dir),
+                sequences=dataset_cfg.SEQUENCES,
+                max_images=max_viz,
+                spread=dataset_cfg.SPREAD_VISUALIZATIONS,
+                output_dir=str(visualizations_dir),
+                fisheye_center=fisheye_center
+            )
 
     # Final instructions
     print("\n" + "=" * 80)

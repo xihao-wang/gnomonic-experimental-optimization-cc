@@ -37,7 +37,9 @@ def main():
 
     # Dataset roots mapping
     dataset_roots = {
-        "bomni": cfg.DATASETS.BOMNI.ROOT_DIR
+        "bomni": cfg.DATASETS.BOMNI.ROOT_DIR,
+        "piropo": cfg.DATASETS.PIROPO.ROOT_DIR,
+        "cepdof": cfg.DATASETS.CEPDOF.ROOT_DIR
     }
 
     print("=" * 80)
@@ -60,7 +62,9 @@ def main():
         output_dir=cfg.METRICS_EVALUATION.OUTPUT_DIR,
         enable_timing=cfg.METRICS_EVALUATION.ENABLE_TIMING,
         enable_pr_curves=cfg.METRICS_EVALUATION.ENABLE_PR_CURVES,
-        max_images=cfg.METRICS_EVALUATION.MAX_IMAGES
+        enable_visuals=cfg.METRICS_EVALUATION.ENABLE_VISUALS,
+        max_images=cfg.METRICS_EVALUATION.MAX_IMAGES,
+        spread_samples=cfg.METRICS_EVALUATION.SPREAD_SAMPLES
     )
 
     # Run evaluation

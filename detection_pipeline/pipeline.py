@@ -129,7 +129,7 @@ class DetectionPipeline:
 
         return proj_cfg
 
-    def run(self, fisheye_image=None, projection_config=None, timer=None):
+    def run(self, fisheye_image=None, projection_config=None, timer=None, return_visuals=False):
         """
         Execute the full detection pipeline.
 
@@ -140,10 +140,13 @@ class DetectionPipeline:
                              If None, builds from config.
             timer: Optional PipelineTimer for measuring stage execution times.
                   If None, no timing is performed.
+            return_visuals: When True (metrics mode only), also return the composite
+                           image and raw YOLO detections for visualization.
 
         Returns:
             If fisheye_image and projection_config are provided (metrics mode):
-                list: fisheye_bboxes (backprojected detections)
+                return_visuals=False: list of converted fisheye bboxes
+                return_visuals=True:  (fisheye_bboxes, composite_image, raw_detections)
             Otherwise (normal mode):
                 tuple: (detections, composite_image, metadata, results_dir, fisheye_bboxes)
         """
@@ -299,6 +302,8 @@ class DetectionPipeline:
 
             # Convert fisheye_bboxes to standard format expected by evaluator
             if fisheye_bboxes is None or len(fisheye_bboxes) == 0:
+                if return_visuals:
+                    return [], composite_image, detections
                 return []
 
             # Convert format from backprojection output to evaluator expected format
@@ -319,6 +324,8 @@ class DetectionPipeline:
                     'class_name': bbox.get('class_name', 'person')
                 })
 
+            if return_visuals:
+                return converted_bboxes, composite_image, detections
             return converted_bboxes
         else:
             # Normal mode: save results and return full output

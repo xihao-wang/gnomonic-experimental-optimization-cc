@@ -12,14 +12,19 @@ Recall@0.5      |       0.326        |       0.390
 F1@0.5          |       0.389        |       0.498        
 
 Timing (mean per image):
-Total Time      |      0.066      s |      0.080      s 
-Composite Gen   |      0.035      s |      0.041      s 
-YOLO Detection  |      0.030      s |      0.038      s 
+Total Time      |      0.055      s |      0.079      s 
+Composite Gen   |      0.028      s |      0.029      s 
+YOLO Detection  |      0.027      s |      0.050      s 
 Backprojection  |      0.000      s |      0.000      s 
 Soft-NMS        |      0.000      s |      0.000      s 
 
 ================================================================================
-BEST CONFIGURATION:
-  Best AP: grid-2x2-fov60 (0.219)
-  Fastest: grid-2x2-fov60 (0.066s/image)
+BEST CONFIGURATION PER METRIC:
+  Best AP@[0.30:0.95]: grid-2x2-fov60 (0.219)
+  Best AP@0.50:       chiang-2021-baseline (0.310)
+  Best AP@0.75:       grid-2x2-fov60 (0.091)
+  Best Precision@0.5: chiang-2021-baseline (0.688)
+  Best Recall@0.5:    chiang-2021-baseline (0.390)
+  Best F1@0.5:        chiang-2021-baseline (0.498)
+  Fastest:            grid-2x2-fov60 (0.055s/image)
 ================================================================================

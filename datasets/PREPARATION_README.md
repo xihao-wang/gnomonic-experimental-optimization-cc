@@ -144,6 +144,42 @@ _C.DATASETS.BOMNI.PREPARATION.TARGET_NAME = "BOMNI-corrected"  # production
 
 ---
 
+## CEPDOF and Datasets with Reliable Annotations (Skip Step 2)
+
+For datasets whose annotations come from their original authors and are considered
+reliable (e.g., CEPDOF), the full two-step pipeline is not required.
+
+**Key point**: Step 3 (annotation conversion) in `prepare_dataset_step1.py` always
+converts **all** annotated frames, regardless of `MAX_VISUALIZATIONS_PER_SEQUENCE`.
+The visualization limit only affects Step 4 (how many images to review). The
+standard-annotations folder is therefore already complete after Step 1 alone.
+
+**Do NOT run `prepare_dataset_step2.py`** for such datasets — it would delete all
+annotations that lack a corresponding visualization, which would wipe out the vast
+majority of correctly converted annotations.
+
+**Workflow for CEPDOF (and similar datasets)**:
+
+```python
+# In datasets/lib/config.py, set a small visualization sample for spot-checking:
+_C.CEPDOF.MAX_VISUALIZATIONS_PER_SEQUENCE = 100  # sample only, not used for filtering
+_C.CEPDOF.SPREAD_VISUALIZATIONS = True            # spread evenly across sequence
+```
+
+```bash
+# Run Step 1 only
+python datasets/prepare_dataset_step1.py  # DATASET_NAME = "cepdof"
+
+# Spot-check the generated visualizations for obvious issues
+# If annotations look correct → production dataset is ready, do NOT run Step 2
+# If major issues found → address them manually or re-run with different settings
+```
+
+**Result**: `datasets/all-datasets/CEPDOF-production/standard-annotations/` contains
+all converted annotations and is ready for evaluation immediately after Step 1.
+
+---
+
 ## Extending to New Datasets
 
 For PIROPO or any new dataset:
