@@ -1,0 +1,30 @@
+================================================================================
+Configuration Comparison: CEPDOF Dataset
+================================================================================
+
+Metric          |   grid-2x2-fov60   | chiang-2021-baseli 
+----------------|--------------------|--------------------
+AP@[0.30:0.95]  |       0.365        |       0.417        
+AP@0.50         |       0.643        |       0.683        
+AP@0.75         |       0.049        |       0.129        
+Precision@0.5   |       0.743        |       0.727        
+Recall@0.5      |       0.734        |       0.750        
+F1@0.5          |       0.738        |       0.738        
+
+Timing (mean per image):
+Total Time      |      0.122      s |      0.111      s 
+Composite Gen   |      0.046      s |      0.043      s 
+YOLO Detection  |      0.075      s |      0.066      s 
+Backprojection  |      0.001      s |      0.001      s 
+Soft-NMS        |      0.000      s |      0.000      s 
+
+================================================================================
+BEST CONFIGURATION PER METRIC:
+  Best AP@[0.30:0.95]: chiang-2021-baseline (0.417)
+  Best AP@0.50:       chiang-2021-baseline (0.683)
+  Best AP@0.75:       chiang-2021-baseline (0.129)
+  Best Precision@0.5: grid-2x2-fov60 (0.743)
+  Best Recall@0.5:    chiang-2021-baseline (0.750)
+  Best F1@0.5:        grid-2x2-fov60 (0.738)
+  Fastest:            chiang-2021-baseline (0.111s/image)
+================================================================================

@@ -509,7 +509,7 @@ When comparing configurations, focus on:
 Each evaluation run creates a versioned session folder:
 
 ```
-evaluation/metrics-evaluation/
+evaluation/proj-conf-comparison/
 └── metrics_eval_session_N/
     ├── metadata.txt                     # Session info (model, configs, date)
     ├── projection_configs_snapshot.py   # Exact config used (reproducibility)
@@ -573,7 +573,7 @@ _C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]
 Each dataset is evaluated independently. Results are stored in separate per-dataset folders under the session directory:
 
 ```
-evaluation/metrics-evaluation/
+evaluation/proj-conf-comparison/
 └── metrics_eval_session_N/
     ├── metadata.txt
     ├── projection_configs_snapshot.py

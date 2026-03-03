@@ -9,7 +9,11 @@ Usage:
     python evaluation/run_metrics_evaluation.py
 
 Configuration:
-    Edit evaluation/lib/config.py METRICS_EVALUATION section to configure all parameters.
+    - Run parameters (datasets, model, max images, output dir):
+        Edit evaluation/lib/config.py  ->  METRICS_EVALUATION section
+
+    - Projection configurations to compare (the actual configs under test):
+        Edit evaluation/projection_configs_for_metrics.py
 
 Author: Yassir Zardoua
 Email: y.zardoua@caplogy.com | yassirzardoua@gmail.com
@@ -45,11 +49,12 @@ def main():
     print("=" * 80)
     print("PROJECTION CONFIGURATION METRICS EVALUATION")
     print("=" * 80)
-    print(f"Projection configs: {cfg.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE}")
-    print(f"YOLO model: {cfg.METRICS_EVALUATION.YOLO_MODEL}")
-    print(f"Datasets: {cfg.METRICS_EVALUATION.DATASETS}")
-    print(f"Max images: {cfg.METRICS_EVALUATION.MAX_IMAGES or 'All'}")
-    print(f"Output: {cfg.METRICS_EVALUATION.OUTPUT_DIR}")
+    print("Config file : evaluation/lib/config.py  (METRICS_EVALUATION section)")
+    print(f"Proj configs: {cfg.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE}")
+    print(f"YOLO model  : {cfg.METRICS_EVALUATION.YOLO_MODEL}")
+    print(f"Datasets    : {cfg.METRICS_EVALUATION.DATASETS}")
+    print(f"Max images  : {cfg.METRICS_EVALUATION.MAX_IMAGES or 'All'}")
+    print(f"Output      : {cfg.METRICS_EVALUATION.OUTPUT_DIR}")
     print("=" * 80)
 
     # Create metrics evaluator runner

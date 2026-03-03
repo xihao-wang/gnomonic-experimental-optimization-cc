@@ -94,7 +94,7 @@ Thumbs.db
 coding-data/
 planning-data/
 evaluation/configs-comparison/
-evaluation/metrics-evaluation/
+evaluation/proj-conf-comparison/
 
 # Irrelevant files or folders
 INFRASTRUCTURE_SUMMARY.txt

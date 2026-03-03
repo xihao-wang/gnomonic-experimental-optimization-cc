@@ -1,22 +1,10 @@
-feat: add PIROPO/CEPDOF evaluation loaders, spread sampling, and visual output
+chore: rename output folder and clarify configuration entry points
 
-Dataset loaders for evaluation:
-- Add piropo_dataset.py: loads 3,004 annotated fisheye frames across 2 rooms and
-  4 cameras (Room_A: omni_1A/2A/3A, Room_B: omni_1B), auto-discovers hierarchy
-- Add cepdof_dataset.py: loads 25,358 annotated overhead fisheye frames across
-  8 challenging sequences (Lunch, Edge cases, High activity, IR conditions)
-- Both use the unified standard JSON format (center_x/y, width, height, angle)
-- Register both in dataset_registry.py and wire into metrics runner and config
-
-Spread sampling for better representativity of data:
-- Evaluation runner now samples frames evenly across the full dataset
-  (step = total / max_images) instead of taking the first N consecutive frames
-- Controlled by SPREAD_SAMPLES flag in config; MAX_IMAGES applied per dataset
-
-Visual output for qualitative inspection:
-- New ENABLE_VISUALS flag saves one image pair per evaluated frame:
-  composite image with YOLO detections, and fisheye image with GT boxes (green)
-  and backprojected predictions after Soft-NMS (yellow)
-- Saved flat (no dataset hierarchy) under {session}/{dataset}/visuals/{config_id}/
+- Rename evaluation output folder from metrics-evaluation to proj-conf-comparison
+  to better reflect its purpose (comparing projection configurations for detection)
+- Update all references: config.py, .gitignore, README.md
+- Add explicit configuration instructions to run_metrics_evaluation.py docstring:
+  distinguish between run parameters (config.py) and projection configs under test
+  (projection_configs_for_metrics.py)
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>
