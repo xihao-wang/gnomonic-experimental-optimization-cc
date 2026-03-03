@@ -424,30 +424,121 @@ Each dataset gets its own folder to avoid conflicts.
 
 The metrics evaluation system compares different projection configurations by running the full detection pipeline and computing comprehensive metrics against ground truth annotations.
 
-### Quick Start
+There are two independent workflows:
 
-**1. Configure which projection configs to evaluate:**
+| Workflow | When to use |
+|----------|-------------|
+| **Incremental** (`run_single_config.py` + `run_comparator.py`) | Standard use — evaluate configs one at a time, compare whenever you like, never re-run a finished config |
+| **Batch** (`run_metrics_evaluation.py`) | Legacy — evaluates all configs in one session; adding a new config reruns everything |
 
-Edit `evaluation/projection_configs_for_metrics.py`:
+---
+
+### Incremental Workflow (recommended)
+
+Each configuration is evaluated once and its results are stored permanently. Adding a new configuration or re-running the comparator never touches previously evaluated configs.
+
+**Step 1 — Define your projection configurations**
+
+Add or edit entries in `evaluation/projection_configs_for_metrics.py`:
+
 ```python
 class ProjectionConfigs:
     CONFIGS = [
         {
-            "id": "grid-2x2-fov60",
+            "id": "grid-2x2-fov60",        # unique identifier (used as folder name)
             "name": "2x2 Grid, 60deg FOV",
             "proj_nbr": 4,
-            "fov_h": 60.0,
-            "fov_v": 60.0,
+            "fov_h": 60.0, "fov_v": 60.0,
             "latitude": 45.0,
-            "lon_0": 0.0,
-            "lon_step": 90.0,
+            "lon_0": 0.0, "lon_step": 90.0,
             "grid": [2, 2],
             "comp_sz": [640, 640],
             "target_mp": "auto"
         },
-        # Add more configs...
+        # add more configs here...
     ]
 ```
+
+**Step 2 — Pick one configuration to evaluate**
+
+In `evaluation/lib/config.py`, set:
+
+```python
+_C.SINGLE_CONFIG_RUN.CONFIG_ID = "grid-2x2-fov60"   # must match an 'id' in step 1
+```
+
+Adjust any other run parameters in the same `SINGLE_CONFIG_RUN` section if needed
+(datasets, max images, YOLO model, visuals, etc.).
+
+**Step 3 — Run the evaluation for that configuration**
+
+```bash
+python evaluation/run_single_config.py
+```
+
+Results are saved to `evaluation/proj-conf-comparison/configs/grid-2x2-fov60/`.
+Repeat steps 2–3 for every configuration you want to evaluate. Each run is fully
+independent; completed configs are never re-evaluated (unless `OVERWRITE_EXISTING=True`).
+
+**Step 4 — Compare all evaluated configurations**
+
+```bash
+python evaluation/run_comparator.py
+```
+
+The comparator auto-discovers every folder inside
+`evaluation/proj-conf-comparison/configs/` and compares them. You can restrict which
+configs to compare by listing them explicitly in `config.py`:
+
+```python
+_C.COMPARATOR.CONFIG_IDS = []                          # empty = compare all found
+# or:
+_C.COMPARATOR.CONFIG_IDS = ["grid-2x2-fov60", "chiang-2021-baseline"]
+```
+
+Output is written to a timestamped folder under
+`evaluation/proj-conf-comparison/comparisons/comparison_YYYYMMDD_HHMMSS/`.
+
+**Incremental output structure:**
+
+```
+evaluation/proj-conf-comparison/
+├── configs/                              # one subfolder per evaluated config
+│   ├── grid-2x2-fov60/
+│   │   ├── config.json                  # projection params + sample indices
+│   │   ├── bomni/
+│   │   │   ├── metrics.json
+│   │   │   ├── timing.json
+│   │   │   ├── pr_curves/
+│   │   │   └── visuals/
+│   │   ├── piropo/
+│   │   └── cepdof/
+│   └── chiang-2021-baseline/
+│       └── ...
+└── comparisons/                         # comparator outputs (no re-execution)
+    └── comparison_YYYYMMDD_HHMMSS/
+        ├── comparison_config.json
+        ├── consistency_check.txt
+        ├── bomni_comparison_table.txt
+        ├── piropo_comparison_table.txt
+        ├── cepdof_comparison_table.txt
+        ├── overall_winner.txt
+        └── figures/
+            ├── bomni_ap_bar.png
+            ├── bomni_pr_curves_overlay.png
+            └── ...
+```
+
+---
+
+### Batch Workflow (legacy)
+
+Evaluates all configurations defined in `projection_configs_for_metrics.py` in a single
+session. Adding a new config requires re-running everything from scratch.
+
+**1. Configure which projection configs to evaluate:**
+
+Edit `evaluation/projection_configs_for_metrics.py` (same format as above).
 
 **2. Configure evaluation settings (optional):**
 
@@ -642,27 +733,30 @@ All loaders read standard JSON annotations (center_x, center_y, width, height, a
 1. ~~**Implement evaluation metrics**~~ ✅ COMPLETE
 2. ~~**Integrate with detection pipeline**~~ ✅ COMPLETE
 3. ~~**Add PIROPO and CEPDOF datasets**~~ ✅ COMPLETE
-4. **Configuration search** - Systematically test parameter ranges (Phase 6)
+4. ~~**Incremental per-config evaluation**~~ ✅ COMPLETE
+5. **Configuration search** - Systematically test parameter ranges (Phase 6)
 
 ### Files in this Module
 
 Entry points (run directly):
-- `run_metrics_evaluation.py` - Run metrics evaluation across configurations
-- `run_projection_evaluation.py` - Run visual backprojection test
+- `run_single_config.py` - Evaluate one projection config (incremental workflow)
+- `run_comparator.py` - Compare pre-computed config results (incremental workflow)
+- `run_metrics_evaluation.py` - Evaluate all configs in one session (batch/legacy)
+- `run_backprojection_visual_test.py` - Visual backprojection test
 - `visualize_datasets.py` - Visualize dataset annotations
 
 Library (imported by other modules, in `lib/`):
 - `lib/config.py` - YACS configuration for evaluation
+- `lib/single_config_runner.py` - SingleConfigRunner (incremental workflow)
+- `lib/comparator.py` - ConfigComparator (incremental workflow)
 - `lib/bomni_dataset.py` - BOMNI runtime loader
 - `lib/piropo_dataset.py` - PIROPO runtime loader
 - `lib/cepdof_dataset.py` - CEPDOF runtime loader
 - `lib/dataset_registry.py` - Dataset metadata registry
-- `lib/metrics_evaluator_runner.py` - Metrics evaluation orchestrator
+- `lib/metrics_evaluator_runner.py` - Batch evaluation orchestrator (legacy)
 - `lib/evaluator.py` - Per-image evaluation logic
 - `lib/aggregator.py` - Results aggregation + AP + PR curves
 - `lib/timing.py` - Pipeline timing utilities
-- `lib/visualization.py` - GT + predictions overlay
-- `lib/output_manager.py` - Versioned session folders
 - `README.md` - This file
 
 ### References

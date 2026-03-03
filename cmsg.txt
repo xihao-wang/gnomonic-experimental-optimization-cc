@@ -1,10 +1,35 @@
-chore: rename output folder and clarify configuration entry points
+feat: add incremental per-configuration evaluation architecture
 
-- Rename evaluation output folder from metrics-evaluation to proj-conf-comparison
-  to better reflect its purpose (comparing projection configurations for detection)
-- Update all references: config.py, .gitignore, README.md
-- Add explicit configuration instructions to run_metrics_evaluation.py docstring:
-  distinguish between run parameters (config.py) and projection configs under test
-  (projection_configs_for_metrics.py)
+Decouples individual config runs from the comparison step so that adding
+a new projection configuration never requires re-running existing ones.
+
+New files:
+  evaluation/lib/single_config_runner.py  — SingleConfigRunner class
+  evaluation/run_single_config.py         — entry point (reads SINGLE_CONFIG_RUN in config.py)
+  evaluation/lib/comparator.py            — ConfigComparator class
+  evaluation/run_comparator.py            — entry point (reads COMPARATOR in config.py)
+
+Modified:
+  evaluation/lib/config.py               — SINGLE_CONFIG_RUN + COMPARATOR sections
+
+Key design decisions:
+- Each config writes to evaluation/proj-conf-comparison/configs/{config_id}/
+  (config.json, per-dataset metrics.json, timing.json, pr_curves/, visuals/)
+- config.json stores projection params + sample indices for reproducibility
+- Comparator reads pre-computed JSON only — zero detection re-execution
+- Sampling consistency check warns when configs used different frame subsets
+- Three independent robustness winners: Custom AP@[0.30:0.95], COCO AP@[0.50:0.95],
+  Pascal VOC AP@0.50; plus a separate speed winner (FPS); equal-weight mean across datasets
+- AP used throughout instead of mAP (single class: person)
+- Metric notes appended to every comparison table and overall_winner.txt explaining
+  each AP style and the rationale for the 0.30 lower bound (rotated-box IoU strictness,
+  CEPDOF free-orientation bboxes)
+- OVERWRITE_EXISTING=False (default) protects already-evaluated configs
+- Legacy run_metrics_evaluation.py unchanged (backward compatible)
+
+Also fixes pre-existing .gitignore bug: the bare `lib/` rule was silently
+excluding all of evaluation/lib/ and datasets/lib/ from version control.
+Added `!evaluation/lib/` and `!datasets/lib/` negation exceptions so that
+library source files are now tracked as intended.
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>
