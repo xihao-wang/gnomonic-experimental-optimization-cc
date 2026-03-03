@@ -1,0 +1,10 @@
+chore: rename output folder and clarify configuration entry points
+
+- Rename evaluation output folder from metrics-evaluation to proj-conf-comparison
+  to better reflect its purpose (comparing projection configurations for detection)
+- Update all references: config.py, .gitignore, README.md
+- Add explicit configuration instructions to run_metrics_evaluation.py docstring:
+  distinguish between run parameters (config.py) and projection configs under test
+  (projection_configs_for_metrics.py)
+
+Author: Yassir Zardoua <y.zardoua@caplogy.com>

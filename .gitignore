@@ -42,6 +42,7 @@ env/
 datasets/data/
 datasets/all-datasets/
 results/
+detection_pipeline/results/
 *.npy
 *.h5
 *.pkl
@@ -55,10 +56,19 @@ results/
 *.gif
 *.tiff
 
+# Video files (too large for version control)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+*.webm
+
 # YOLO models (.pt files anywhere in subdirectories)
 *.pt
 *.pth
-detection-pipeline/models/
+models/
 ~/.yolov8/
 
 # Logs
@@ -83,9 +93,13 @@ Thumbs.db
 # Project-specific
 coding-data/
 planning-data/
+evaluation/configs-comparison/
+evaluation/proj-conf-comparison/
 
-# Irrelevant files
+# Irrelevant files or folders
 INFRASTRUCTURE_SUMMARY.txt
 CLAUDE.md
 USER_DEVELOPMENT_PROGRESS.md
 AI_DEVELOPMENT_PROGRESS.md
+.claude/
+.gitignore

@@ -13,13 +13,13 @@ and DELETE any images with incorrect annotations. Then run prepare_dataset_step2
 IMPORTANT: User should ONLY delete visualization images, NEVER annotation files!
 
 Configuration:
-  - Edit evaluation/config.py to specify:
-    - DATASETS.{DATASET}.PREPARATION.VIDEO_DIR (input videos)
-    - DATASETS.{DATASET}.PREPARATION.RAW_ANNOTATIONS_DIR (input annotations)
-    - DATASETS.{DATASET}.PREPARATION.RAW_ANNOTATION_FORMAT (e.g., "tamura")
-    - DATASETS.{DATASET}.PREPARATION.TARGET_NAME (output folder name)
-    - DATASETS.{DATASET}.PREPARATION.SEQUENCES (sequences to process)
-    - DATASETS.{DATASET}.FISHEYE_CENTER_X/Y (for angle calculation)
+  - Edit datasets/config.py to specify:
+    - {DATASET}.VIDEO_DIR (input videos)
+    - {DATASET}.RAW_ANNOTATIONS_DIR (input annotations)
+    - {DATASET}.RAW_ANNOTATION_FORMAT (e.g., "tamura")
+    - {DATASET}.TARGET_NAME (output folder name)
+    - {DATASET}.SEQUENCES (sequences to process)
+    - {DATASET}.FISHEYE_CENTER_X/Y (for angle calculation)
 
   - Edit DATASET_NAME variable below to select which dataset to prepare
 
@@ -30,7 +30,7 @@ Outputs (under datasets/all-datasets/{TARGET_NAME}/):
   - visualizations/{sequence}/         - Images for manual review
 
 Usage:
-  1. Edit evaluation/config.py to set PREPARATION.TARGET_NAME
+  1. Edit datasets/config.py to set TARGET_NAME
   2. python datasets/prepare_dataset_step1.py
   3. Manually review visualizations and delete incorrect ones
   4. Run datasets/prepare_dataset_step2.py
@@ -42,16 +42,17 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from evaluation.config import get_cfg
-from datasets.bomni_manager import BOMNIManager
-from datasets.piropo_manager import PIROPOManager
+from datasets.lib.config import get_cfg
+from datasets.lib.bomni_manager import BOMNIManager
+from datasets.lib.piropo_manager import PIROPOManager
+from datasets.lib.cepdof_manager import CEPDOFManager
 
 
 # ============================================================================
 # CONFIGURATION: Select dataset to prepare
 # ============================================================================
 
-DATASET_NAME = "bomni"  # Options: "bomni", "piropo"
+DATASET_NAME = "cepdof"  # Options: "bomni", "piropo", "cepdof"
 
 
 # ============================================================================
@@ -64,6 +65,8 @@ def get_manager_for_dataset(dataset_name: str, cfg):
         return BOMNIManager(cfg)
     elif dataset_name == "piropo":
         return PIROPOManager(cfg)
+    elif dataset_name == "cepdof":
+        return CEPDOFManager(cfg)
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
@@ -87,26 +90,38 @@ def main():
 
     # Get dataset-specific config
     if DATASET_NAME == "bomni":
-        prep_cfg = cfg.DATASETS.BOMNI.PREPARATION
-        fisheye_center = (cfg.DATASETS.BOMNI.FISHEYE_CENTER_X, cfg.DATASETS.BOMNI.FISHEYE_CENTER_Y)
+        dataset_cfg = cfg.BOMNI
     elif DATASET_NAME == "piropo":
-        prep_cfg = cfg.DATASETS.PIROPO.PREPARATION
-        fisheye_center = (cfg.DATASETS.PIROPO.FISHEYE_CENTER_X, cfg.DATASETS.PIROPO.FISHEYE_CENTER_Y)
+        dataset_cfg = cfg.PIROPO
+    elif DATASET_NAME == "cepdof":
+        dataset_cfg = cfg.CEPDOF
     else:
         raise ValueError(f"Unknown dataset: {DATASET_NAME}")
 
-    # Build output paths
-    base_dir = Path("datasets/all-datasets") / prep_cfg.TARGET_NAME
-    frames_dir = base_dir / "frames" / "scenario1"
-    annotations_dir = base_dir / "Standard-annotations" / "scenario1"
+    # CEPDOF uses per-image auto-computed center; use None here
+    if dataset_cfg.FISHEYE_CENTER_X == -1.0:
+        fisheye_center = None
+    else:
+        fisheye_center = (dataset_cfg.FISHEYE_CENTER_X, dataset_cfg.FISHEYE_CENTER_Y)
+
+    # Build output paths from config
+    base_dir = Path("datasets/all-datasets") / dataset_cfg.TARGET_NAME
+    frames_dir = base_dir / dataset_cfg.FRAMES_SUBPATH if dataset_cfg.FRAMES_SUBPATH else base_dir
+    annotations_dir = base_dir / dataset_cfg.ANNOTATIONS_SUBPATH
     visualizations_dir = base_dir / "visualizations"
 
     print(f"\nConfiguration:")
-    print(f"  Input videos: {prep_cfg.VIDEO_DIR}")
-    print(f"  Input annotations: {prep_cfg.RAW_ANNOTATIONS_DIR}")
-    print(f"  Input format: {prep_cfg.RAW_ANNOTATION_FORMAT}")
+    if hasattr(dataset_cfg, 'VIDEO_DIR'):
+        print(f"  Input videos: {dataset_cfg.VIDEO_DIR}")
+    if hasattr(dataset_cfg, 'FRAMES_SOURCE_DIR'):
+        print(f"  Input frames: {dataset_cfg.FRAMES_SOURCE_DIR}")
+    print(f"  Input annotations: {dataset_cfg.RAW_ANNOTATIONS_DIR}")
+    print(f"  Input format: {dataset_cfg.RAW_ANNOTATION_FORMAT}")
     print(f"  Target directory: {base_dir}")
-    print(f"  Sequences: {prep_cfg.SEQUENCES}")
+    if hasattr(dataset_cfg, 'SEQUENCES'):
+        print(f"  Sequences: {dataset_cfg.SEQUENCES}")
+    if hasattr(dataset_cfg, 'ROOMS'):
+        print(f"  Rooms: {dataset_cfg.ROOMS}")
     print(f"  Fisheye center: {fisheye_center}")
 
     # Create manager
@@ -116,45 +131,101 @@ def main():
     print("\n" + "=" * 80)
     print("STEP 1: Extracting frames from videos")
     print("=" * 80)
-    manager.extract_frames(
-        video_dir=prep_cfg.VIDEO_DIR,
-        output_dir=str(frames_dir),
-        sequences=prep_cfg.SEQUENCES
-    )
+    if DATASET_NAME == "bomni":
+        manager.extract_frames(
+            video_dir=dataset_cfg.VIDEO_DIR,
+            output_dir=str(frames_dir),
+            sequences=dataset_cfg.SEQUENCES
+        )
+    elif DATASET_NAME in ("piropo", "cepdof"):
+        manager.extract_frames()
 
     # Step 2: Cleanup unannotated frames
     print("\n" + "=" * 80)
     print("STEP 2: Removing unannotated frames")
     print("=" * 80)
-    manager.cleanup_unannotated_frames(
-        frames_dir=str(frames_dir),
-        annotations_dir=prep_cfg.RAW_ANNOTATIONS_DIR,
-        sequences=prep_cfg.SEQUENCES
-    )
+    if DATASET_NAME == "bomni":
+        manager.cleanup_unannotated_frames(
+            frames_dir=str(frames_dir),
+            annotations_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            sequences=dataset_cfg.SEQUENCES
+        )
+    elif DATASET_NAME == "piropo":
+        manager.cleanup_unannotated_frames(
+            frames_dir=str(frames_dir),
+            annotations_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            source_dir=dataset_cfg.FRAMES_SOURCE_DIR
+        )
+    elif DATASET_NAME == "cepdof":
+        manager.cleanup_unannotated_frames(
+            frames_dir=str(frames_dir),
+            annotations_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            source_dir=dataset_cfg.FRAMES_SOURCE_DIR
+        )
 
     # Step 3: Convert to standard JSON format
     print("\n" + "=" * 80)
     print("STEP 3: Converting annotations to standard JSON format")
     print("=" * 80)
-    manager.convert_to_standard_format(
-        input_format=prep_cfg.RAW_ANNOTATION_FORMAT,
-        input_dir=prep_cfg.RAW_ANNOTATIONS_DIR,
-        output_dir=str(annotations_dir),
-        sequences=prep_cfg.SEQUENCES
-    )
+    if DATASET_NAME == "bomni":
+        manager.convert_to_standard_format(
+            input_format=dataset_cfg.RAW_ANNOTATION_FORMAT,
+            input_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            output_dir=str(annotations_dir),
+            sequences=dataset_cfg.SEQUENCES
+        )
+    elif DATASET_NAME == "piropo":
+        manager.convert_to_standard_format(
+            input_format=dataset_cfg.RAW_ANNOTATION_FORMAT,
+            input_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            output_dir=str(annotations_dir),
+            rooms=dataset_cfg.ROOMS,
+            fisheye_center=fisheye_center
+        )
+    elif DATASET_NAME == "cepdof":
+        manager.convert_to_standard_format(
+            input_dir=dataset_cfg.RAW_ANNOTATIONS_DIR,
+            output_dir=str(annotations_dir),
+            sequences=dataset_cfg.SEQUENCES
+        )
 
     # Step 4: Generate visualizations for manual review
     print("\n" + "=" * 80)
     print("STEP 4: Generating visualizations for manual quality review")
     print("=" * 80)
-    manager.visualize_annotations(
-        annotations_dir=str(annotations_dir),
-        frames_dir=str(frames_dir),
-        sequences=prep_cfg.SEQUENCES,
-        max_images="all",
-        output_dir=str(visualizations_dir),
-        fisheye_center=fisheye_center
-    )
+    if DATASET_NAME == "bomni":
+        manager.visualize_annotations(
+            annotations_dir=str(annotations_dir),
+            frames_dir=str(frames_dir),
+            sequences=dataset_cfg.SEQUENCES,
+            max_images="all",
+            output_dir=str(visualizations_dir),
+            fisheye_center=fisheye_center
+        )
+    elif DATASET_NAME == "piropo":
+        manager.visualize_annotations(
+            annotations_dir=str(annotations_dir),
+            frames_dir=str(frames_dir),
+            rooms=dataset_cfg.ROOMS,
+            max_images="all",
+            output_dir=str(visualizations_dir),
+            fisheye_center=fisheye_center
+        )
+    elif DATASET_NAME == "cepdof":
+        max_viz = dataset_cfg.MAX_VISUALIZATIONS_PER_SEQUENCE
+        if max_viz == 0:
+            print("Skipping visualization (MAX_VISUALIZATIONS_PER_SEQUENCE = 0)")
+        else:
+            max_viz = None if max_viz == -1 else max_viz
+            manager.visualize_annotations(
+                annotations_dir=str(annotations_dir),
+                frames_dir=str(frames_dir),
+                sequences=dataset_cfg.SEQUENCES,
+                max_images=max_viz,
+                spread=dataset_cfg.SPREAD_VISUALIZATIONS,
+                output_dir=str(visualizations_dir),
+                fisheye_center=fisheye_center
+            )
 
     # Final instructions
     print("\n" + "=" * 80)

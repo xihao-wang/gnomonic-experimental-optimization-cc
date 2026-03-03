@@ -1,0 +1,44 @@
+{
+  "yolo_model": "models/yolo11x.pt",
+  "configurations": [
+    {
+      "id": "grid-2x2-fov60",
+      "name": "2x2 Grid, 60deg FOV",
+      "proj_nbr": 4,
+      "fov_h": 60.0,
+      "fov_v": 60.0,
+      "latitude": 45.0,
+      "lon_0": 0.0,
+      "lon_step": 90.0,
+      "grid": [2, 2],
+      "comp_sz": [640, 640],
+      "target_mp": "auto"
+    },
+    {
+      "id": "grid-3x3-fov60",
+      "name": "3x3 Grid, 60deg FOV (baseline)",
+      "proj_nbr": 9,
+      "fov_h": 70.0,
+      "fov_v": 70.0,
+      "latitude": 45.0,
+      "lon_0": 0.0,
+      "lon_step": 40.0,
+      "grid": [3, 3],
+      "comp_sz": [640, 640],
+      "target_mp": "auto"
+    },
+    {
+      "id": "grid-2x4-fov96-chiang",
+      "name": "2x4 Grid, 96deg FOV (Chiang baseline)",
+      "proj_nbr": 8,
+      "fov_h": 96.0,
+      "fov_v": 48.0,
+      "latitude": 36.0,
+      "lon_0": 0.0,
+      "lon_step": 45.0,
+      "grid": [2, 4],
+      "comp_sz": [640, 640],
+      "target_mp": 0.48
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+website: https://sites.google.com/site/piropodatabase/
+PIROPO Database
+
+About the database
+The PIROPO database (People in Indoor ROoms with Perspective and Omnidirectional cameras) comprises multiple sequences recorded in two different indoor rooms, using both omnidirectional and perspective cameras. The sequences contain people in a variety of situations, including people walking, standing, and sitting. Both annotated and non-annotated sequences are provided, where ground truth is point-based (each person in the scene is represented by the point located in the center of its head). In total, more than 100,000 annotated frames are available.
+
+Rooms, cameras, and video sequences
+Room A is a rectangular-shaped open area, with an approximate size of 15 x 10 meters, and it is covered by 8 different cameras. Three of the cameras are omnidirectional (omni_1A, omni_2A, and omni_3A), and are ceiling-mounted. The other five cameras are perspective ones (conv_4A to conv_8A), and are installed in wall-ceiling edges. The image dimensions are 800 x 600 pixels for all cameras, and the frame rate is approximately 10 fps.
+
+Room B is a smaller rectangular-shaped room of 8 x 5 meters, with a more cluttered background including multiple tables, chairs, and computers. Two cameras installed in the room have been used. One of them is omnidirectional (omni_1B), and it is ceiling-mounted, and the other is a perspective one (conv_2B). The image dimensions are 800 x 600 pixels for the omnidirectional camera, and 704 x 576 for the perspective one. The frame rate is approximately 10 fps.
+
+Sample images of the cameras captured scenes can be found here https://sites.google.com/site/piropodatabase/cameras-scenarios?authuser=0. In both rooms, all the cameras have been used to record the same sequences. Therefore, there are as many sequences as number of cameras per recording case. However, notice that the sequences are not synchronized.
+
+Description of the sequences
+
+Several sequences have been captured, showing people in a variety of situations. The following table provides a brief description of the contents all the sequences. Sample videos showing the sequences for two of the database cameras can be found here https://sites.google.com/site/piropodatabase/sample-videos?authuser=0.
+
+SEQUENCE ID			DESCRIPTION OF THE SEQUENCE CONTENTS
+
+ training			1 person exhaustively walking around room (in total, 3 people repeating the action)
+ test1				1 person (present in the training) walking (in total, 3 people repeating the action)
+ test2				Up to 3 people simultaneously walking
+ test3				1 person (new to the system, not present in training sequences) walking (in total, 2 people repeating the action)
+ test4				1 person walking and standing still (in total, 2 people repeating the action)
+ test5				Up to 5 people simultaneously walking
+ test6				Up to 10 people simultaneously walking
+ training_seats			1 person sitting in some defined locations (in total, 3 people repeating the action)
+ test7				1 person sitting (in total, 2-3 people repeating the action)
+ test8				1 person sitting and 1 person walking
+ training_illum			empty frames with changed illumination conditions
+ test9				1 person walking with changed illumination conditions (in total, 3 people repeating the action)
+ training_bg			empty frames with changed background conditions
+ test10				Up to 3 people walking with changed scene background
+ test11				1 person changing background
+ test12				1 person walking and leaving new object
+ training_center		sequence showing a person near the center of an omnidirectional camera
+ training_additional_bg		short sequence with additional background conditions (empty frames)
+
+
+Ground Truth Annotations
+The PIROPO database includes ground truth annotations for some of the sequences (see table below). The annotations are contained in Comma Separated Values (.csv) files. Each row of the file represents one image of the corresponding sequence. Then, the first column indicates the number of the image within the sequence (1-indexed). The following column are organized in pairs, indicating the x-coordinate (image column) and the y-coordinate (image row) of the point belonging to the center of the head of each person in scene. Points (0,0) represent non-annotations for convenience purposes.
+
+ · Example of .csv annotation file contents for a sequence with at most one person in scene:
+
+119,0,0                          //frame 119; empty frame
+
+120,0,0                          //frame 120; empty frame
+
+121,718,241                   //frame 121; person (head) at x = 718 pixels, y = 241 pixels
+
+ · Example of .csv annotation file contents for a sequence with more than one person in scene:
+
+11225,225,141,0,0,0,0                    //frame 11225; person #1 at x = 225, y = 141; no more people in scene
+
+11226,213,130,53,564,0,0              //frame 11226; person #1 at x = 213, y = 130; person #2 at x = 53, y = 564
+
+  (two complete .csv sample files can be found here and here)
+
+· Available sequences and ground truth (GT) annotations in the database.- some sequences are not available for certain cameras, since the action takes place out of their field of view. Also, some sequences have not been annotated due to time restrictions. The following table provides information about the availability of sequences and annotations.
+
+
+SEQUENCE AVAILABILITY MATRIX
+=============================
+
+Legend:
+  GT    = Green - GT (Ground Truth) available
+  SEQ   = Yellow - NO GT available but sequence exists
+  NO    = Black - Sequence does not exist
+  EMPTY = Grey - Empty sequence (no GT)
+
+Dataset              | cmm_1A | cmm_2A | omm_3A | conv_4A | conv_5A | conv_6A | conv_7A | conv_8A | omm_1B | conv_2B |
+---------------------|--------|--------|--------|---------|---------|---------|---------|---------|--------|---------|
+training             | GT     | GT     | GT     | GT      | GT      | GT      | GT      | GT      | GT     | GT      |
+training_center      | NO     | GT     | NO     | GT      | GT      | GT      | NO      | NO      | GT     | GT      |
+training_scat1       | GT     | GT     | GT     | GT      | SEQ     | SEQ     | GT      | GT      | GT     | GT      |
+training_scat2       | GT     | GT     | NO     | GT      | SEQ     | SEQ     | GT      | GT      | NO     | NO      |
+test1                | GT     | GT     | GT     | GT      | GT      | GT      | GT      | GT      | GT     | GT      |
+test2                | GT     | GT     | GT     | GT      | GT      | GT      | GT      | NO      | GT     | GT      |
+test3                | GT     | GT     | GT     | GT      | GT      | GT      | GT      | NO      | GT     | GT      |
+test4                | SEQ    | SEQ    | SEQ    | NO      | SEQ     | SEQ     | SEQ     | NO      | SEQ    | NO      |
+test5                | SEQ    | SEQ    | SEQ    | NO      | SEQ     | SEQ     | SEQ     | NO      | SEQ    | NO      |
+test6                | SEQ    | SEQ    | NO     | NO      | SEQ     | NO      | SEQ     | NO      | SEQ    | SEQ     |
+test7                | SEQ    | SEQ    | NO     | NO      | SEQ     | NO      | SEQ     | NO      | SEQ    | SEQ     |
+test8                | SEQ    | SEQ    | SEQ    | NO      | SEQ     | NO      | SEQ     | NO      | SEQ    | SEQ     |
+test9                | SEQ    | SEQ    | SEQ    | NO      | SEQ     | NO      | SEQ     | NO      | SEQ    | SEQ     |
+test10               | SEQ    | SEQ    | SEQ    | NO      | SEQ     | NO      | SEQ     | NO      | SEQ    | SEQ     |
+test11               | SEQ    | SEQ    | SEQ    | NO      | SEQ     | NO      | SEQ     | SEQ     | SEQ    | SEQ     |
+test12               | SEQ    | SEQ    | NO     | NO      | SEQ     | NO      | SEQ     | NO      | SEQ    | SEQ     |
+training_illum       | EMPTY  | EMPTY  | EMPTY  | EMPTY   | EMPTY   | EMPTY   | EMPTY   | EMPTY   | EMPTY  | EMPTY   |
+training_bg          | EMPTY  | EMPTY  | EMPTY  | EMPTY   | EMPTY   | EMPTY   | EMPTY   | EMPTY   | EMPTY  | EMPTY   |
+training_additional_bg| EMPTY | EMPTY  | EMPTY  | EMPTY   | EMPTY   | EMPTY   | EMPTY   | EMPTY   | EMPTY  | EMPTY   |

@@ -13,9 +13,9 @@ Usage:
     python -m evaluation.visualize_datasets
 """
 
-from evaluation.config import get_cfg
-from datasets.bomni_manager import BOMNIManager
-from datasets.piropo_manager import PIROPOManager
+from evaluation.lib.config import get_cfg
+from datasets.lib.bomni_manager import BOMNIManager
+from datasets.lib.piropo_manager import PIROPOManager
 
 
 # ============================================================================

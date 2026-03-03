@@ -97,33 +97,33 @@ PRESETS = {
         "name": "Wide Angle Configuration",
         "description": "6 projections with wide 120° horizontal FOV",
         "img_path": DEFAULT_IMG_PATH,
-        "proj_nbr": 6,
-        "fov_h": 120.0,
-        "fov_v": 90.0,
-        "latitude": 45.0,
+        "proj_nbr": 4,
+        "fov_h": 106.0,
+        "fov_v": 106.0,
+        "latitude": 37.0,
         "lon_0": 0.0,
-        "lon_step": 60.0,
-        "grid": None,
+        "lon_step": 90,  #360/4
+        "grid": (2, 2),
         "comp_sz": (640, 640),
-        "target_mp": 0.48
+        "target_mp": 'auto'
     },
     
     # --------------------------------------------------------------------
     # Higher resolution configuration - same coverage but higher resolution
     # --------------------------------------------------------------------
-    "high_res": {
-        "name": "High Resolution Configuration",
-        "description": "6 projections with higher resolution output (1MP per projection)",
+    "chiang_2021_preset": {
+        "name": "Chiang 2021 Configuration",
+        "description": "8 projections arranged in 2 rows (4 per row)",
         "img_path": DEFAULT_IMG_PATH,
-        "proj_nbr": 6,
-        "fov_h": 90.0,
-        "fov_v": 60.0,
+        "proj_nbr": 8,
+        "fov_h": 48.0,          # alpha_x
+        "fov_v": 96.0,          # alpha_y
         "latitude": 45.0,
         "lon_0": 0.0,
-        "lon_step": 60.0,
-        "grid": None,
-        "comp_sz": (1024, 1024),
-        "target_mp": 1.0  # Higher resolution per projection
+        "lon_step": 45.0,
+        "grid": (2, 4),
+        "comp_sz": (640, 640),
+        "target_mp": 'auto'  # Higher resolution per projection
     }
 }
 
