@@ -1,0 +1,68 @@
+{
+    "config_id": "chiang-2021-baseline",
+    "config_name": "Chiang 2021 Baseline (8 proj, 2x4 grid)",
+    "description": "",
+    "date": "2026-03-03T15:55:22",
+    "yolo_model": "models/yolov8m.pt",
+    "projection_params": {
+        "proj_nbr": 8,
+        "fov_h": 48.0,
+        "fov_v": 96.0,
+        "latitude": 36.0,
+        "lon_0": 0.0,
+        "lon_step": 45.0,
+        "grid": [
+            2,
+            4
+        ],
+        "comp_sz": [
+            640,
+            640
+        ],
+        "target_mp": "auto"
+    },
+    "datasets_evaluated": {
+        "bomni": {
+            "num_images_total": 0,
+            "num_images_used": 0,
+            "max_images": 5000,
+            "spread_samples": true,
+            "sample_indices": []
+        },
+        "piropo": {
+            "num_images_total": 0,
+            "num_images_used": 0,
+            "max_images": 5000,
+            "spread_samples": true,
+            "sample_indices": []
+        },
+        "cepdof": {
+            "num_images_total": 0,
+            "num_images_used": 0,
+            "max_images": 5000,
+            "spread_samples": true,
+            "sample_indices": []
+        }
+    },
+    "iou_thresholds": [
+        0.3,
+        0.35,
+        0.4,
+        0.45,
+        0.5,
+        0.55,
+        0.6,
+        0.65,
+        0.7,
+        0.75,
+        0.8,
+        0.85,
+        0.9,
+        0.95
+    ],
+    "nms_params": {
+        "stage1_iou": 0.8,
+        "stage2_sigma": 0.2,
+        "stage2_score_thresh": 0.3
+    }
+}

@@ -96,7 +96,8 @@ def main():
         enable_visuals=scr.ENABLE_VISUALS,
         max_images=scr.MAX_IMAGES,
         spread_samples=scr.SPREAD_SAMPLES,
-        overwrite_existing=scr.OVERWRITE_EXISTING
+        overwrite_existing=scr.OVERWRITE_EXISTING,
+        vis_iou_threshold=scr.VIS_IOU_THRESHOLD
     )
 
     runner.run()

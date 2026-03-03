@@ -69,7 +69,8 @@ def main():
         enable_pr_curves=cfg.METRICS_EVALUATION.ENABLE_PR_CURVES,
         enable_visuals=cfg.METRICS_EVALUATION.ENABLE_VISUALS,
         max_images=cfg.METRICS_EVALUATION.MAX_IMAGES,
-        spread_samples=cfg.METRICS_EVALUATION.SPREAD_SAMPLES
+        spread_samples=cfg.METRICS_EVALUATION.SPREAD_SAMPLES,
+        vis_iou_threshold=cfg.METRICS_EVALUATION.VIS_IOU_THRESHOLD
     )
 
     # Run evaluation

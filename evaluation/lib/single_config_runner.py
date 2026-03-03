@@ -32,6 +32,7 @@ from evaluation.lib.cepdof_dataset import CEPDOFDataset
 from evaluation.lib.timing import PipelineTimer
 from evaluation.lib.evaluator import DetectionEvaluator
 from evaluation.lib.aggregator import ResultsAggregator
+from evaluation.lib.metrics import match_predictions_to_ground_truth
 from detection_pipeline.pipeline import DetectionPipeline
 
 # Known pipeline NMS constants (documented for reproducibility in config.json)
@@ -40,6 +41,15 @@ _NMS_PARAMS = {
     "stage2_sigma": 0.2,
     "stage2_score_thresh": 0.3
 }
+
+# Visual color/thickness constants (BGR).  These drive the fisheye output only.
+_CLR_GT   = (0, 255, 0)      # Green  — detected GT box (thick background)
+_CLR_FN   = (0, 0, 255)      # Red    — missed GT / false negative (thin)
+_CLR_TP   = (255, 0, 0)      # Blue   — true positive prediction (thin)
+_CLR_FP   = (0, 255, 255)    # Yellow — false positive prediction (thin)
+_CLR_COMP = (255, 255, 255)  # White  — raw YOLO boxes on composite image
+_THICK_GT   = 3
+_THICK_THIN = 2
 
 
 class SingleConfigRunner:
@@ -68,7 +78,8 @@ class SingleConfigRunner:
         enable_visuals: bool = False,
         max_images: Optional[int] = None,
         spread_samples: bool = True,
-        overwrite_existing: bool = False
+        overwrite_existing: bool = False,
+        vis_iou_threshold: float = 0.50
     ):
         """
         Initialize the runner.
@@ -86,6 +97,8 @@ class SingleConfigRunner:
             max_images:        Maximum images per dataset (None = all)
             spread_samples:    Distribute samples evenly vs. taking first N
             overwrite_existing: Overwrite if this config has already been evaluated
+            vis_iou_threshold: IoU threshold used to classify TP/FP/FN in visuals
+                               (display only — does not affect metrics)
         """
         self.config = config
         self.yolo_model = yolo_model
@@ -99,6 +112,7 @@ class SingleConfigRunner:
         self.max_images = max_images
         self.spread_samples = spread_samples
         self.overwrite_existing = overwrite_existing
+        self.vis_iou_threshold = vis_iou_threshold
 
     def run(self) -> bool:
         """
@@ -374,14 +388,28 @@ class SingleConfigRunner:
         """
         Save composite + fisheye image pair for one frame.
 
+        Composite  : raw YOLO axis-aligned boxes in white.
+        Fisheye    : TP/FP/FN colour-coded rotated boxes with confidence labels.
+                     Green (thick) = detected GT drawn first (background reference).
+                     Red   (thin)  = missed GT (false negatives), labelled "FN".
+                     Blue  (thin)  = true positive predictions with confidence score.
+                     Yellow(thin)  = false positive predictions with confidence score.
+        Legend     : saved once as visuals/legend.png (on the first frame).
+
         Output:
             {dataset_out_dir}/visuals/{idx:05d}_composite.jpg
             {dataset_out_dir}/visuals/{idx:05d}_fisheye.jpg
+            {dataset_out_dir}/visuals/legend.png  (first frame only)
         """
         visuals_dir = dataset_out_dir / "visuals"
         visuals_dir.mkdir(parents=True, exist_ok=True)
 
-        # Composite: YOLO detections in green
+        if idx == 0:
+            self._save_legend(visuals_dir)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        # ── Composite: raw YOLO detections in white ───────────────────────────
         comp_viz = composite_image.copy()
         H_c, W_c = comp_viz.shape[:2]
         for det in raw_detections:
@@ -391,31 +419,126 @@ class SingleConfigRunner:
             bh = int(det["h"] * H_c)
             x1, y1 = cx - bw // 2, cy - bh // 2
             x2, y2 = cx + bw // 2, cy + bh // 2
-            cv2.rectangle(comp_viz, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.rectangle(comp_viz, (x1, y1), (x2, y2), _CLR_COMP, _THICK_THIN)
             cv2.putText(
                 comp_viz, f"{det['confidence']:.2f}",
-                (x1, max(0, y1 - 5)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1
+                (x1, max(0, y1 - 4)),
+                font, 0.4, _CLR_COMP, 1
             )
         cv2.imwrite(str(visuals_dir / f"{idx:05d}_composite.jpg"), comp_viz)
 
-        # Fisheye: GT (green) + predictions (yellow) as rotated boxes
+        # ── Fisheye: classify predictions against GT ──────────────────────────
+        true_positives, false_positives, false_negatives = \
+            match_predictions_to_ground_truth(
+                predictions, ground_truth, self.vis_iou_threshold
+            )
+        tp_gt_indices = {tp[1] for tp in true_positives}
+
         fish_viz = fisheye_image.copy()
-        for ann in ground_truth:
-            box = cv2.boxPoints((
+
+        # 1. Green (thick): detected GT boxes — drawn first as background layer
+        for gt_idx in tp_gt_indices:
+            ann = ground_truth[gt_idx]
+            box = np.intp(cv2.boxPoints((
                 (ann["center_x"], ann["center_y"]),
                 (ann["width"], ann["height"]),
                 ann["angle"]
-            ))
-            cv2.drawContours(fish_viz, [np.intp(box)], 0, (0, 255, 0), 2)
-        for pred in predictions:
-            box = cv2.boxPoints((
+            )))
+            cv2.drawContours(fish_viz, [box], 0, _CLR_GT, _THICK_GT)
+
+        # 2. Red (thin): missed GT boxes (false negatives), labelled "FN"
+        for gt_idx in false_negatives:
+            ann = ground_truth[gt_idx]
+            box = np.intp(cv2.boxPoints((
+                (ann["center_x"], ann["center_y"]),
+                (ann["width"], ann["height"]),
+                ann["angle"]
+            )))
+            cv2.drawContours(fish_viz, [box], 0, _CLR_FN, _THICK_THIN)
+            tl = self._top_left_corner(box.astype(np.float32))
+            cv2.putText(fish_viz, "FN", tl, font, 0.4, _CLR_FN, 1)
+
+        # 3. Blue (thin): true positive predictions with confidence score
+        for pred_idx, gt_idx, _iou in true_positives:
+            pred = predictions[pred_idx]
+            box = np.intp(cv2.boxPoints((
                 (pred["center_x"], pred["center_y"]),
                 (pred["width"], pred["height"]),
                 pred["angle"]
-            ))
-            cv2.drawContours(fish_viz, [np.intp(box)], 0, (0, 255, 255), 2)
+            )))
+            cv2.drawContours(fish_viz, [box], 0, _CLR_TP, _THICK_THIN)
+            tl = self._top_left_corner(box.astype(np.float32))
+            score = pred.get("confidence", pred.get("score", 0.0))
+            cv2.putText(fish_viz, f"{score:.2f}", tl, font, 0.4, _CLR_TP, 1)
+
+        # 4. Yellow (thin): false positive predictions with confidence score
+        for pred_idx in false_positives:
+            pred = predictions[pred_idx]
+            box = np.intp(cv2.boxPoints((
+                (pred["center_x"], pred["center_y"]),
+                (pred["width"], pred["height"]),
+                pred["angle"]
+            )))
+            cv2.drawContours(fish_viz, [box], 0, _CLR_FP, _THICK_THIN)
+            tl = self._top_left_corner(box.astype(np.float32))
+            score = pred.get("confidence", pred.get("score", 0.0))
+            cv2.putText(fish_viz, f"{score:.2f}", tl, font, 0.4, _CLR_FP, 1)
+
         cv2.imwrite(str(visuals_dir / f"{idx:05d}_fisheye.jpg"), fish_viz)
+
+    @staticmethod
+    def _top_left_corner(pts: np.ndarray):
+        """
+        Return the top-left pixel of a rotated box for consistent text placement.
+
+        Strategy: pick the two topmost corners (smallest y), then take the
+        leftmost of those two.
+
+        Args:
+            pts: (4, 2) float32 array from cv2.boxPoints.
+
+        Returns:
+            (int, int) pixel coordinate for cv2.putText.
+        """
+        sorted_by_y = pts[np.argsort(pts[:, 1])]
+        top_two = sorted_by_y[:2]
+        corner = top_two[np.argmin(top_two[:, 0])]
+        return (int(corner[0]), int(corner[1]))
+
+    @staticmethod
+    def _save_legend(visuals_dir: Path):
+        """
+        Save a standalone legend.png on a white background explaining the
+        colour coding used in the fisheye visual outputs.
+        """
+        W, H = 420, 188
+        img = np.full((H, W, 3), 255, dtype=np.uint8)
+
+        cv2.putText(
+            img, "Fisheye Visual Legend",
+            (10, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1
+        )
+
+        items = [
+            (_CLR_GT,   _THICK_GT,   "GT detected  (green, thick)"),
+            (_CLR_FN,   _THICK_THIN, "FN  missed GT (red, thin)"),
+            (_CLR_TP,   _THICK_THIN, "TP  prediction (blue, thin)"),
+            (_CLR_FP,   _THICK_THIN, "FP  prediction (yellow, thin)"),
+        ]
+
+        x0, y0, sw, sh, rh = 12, 32, 44, 20, 38
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        for i, (color, thick, label) in enumerate(items):
+            y = y0 + i * rh
+            cv2.rectangle(img, (x0, y), (x0 + sw, y + sh), color, thick)
+            cv2.putText(
+                img, label,
+                (x0 + sw + 10, y + sh - 3),
+                font, 0.45, (30, 30, 30), 1
+            )
+
+        cv2.imwrite(str(visuals_dir / "legend.png"), img)
 
     # -------------------------------------------------------------------------
     # PR curves (individual per-config plots)

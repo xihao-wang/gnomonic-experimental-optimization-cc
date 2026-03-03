@@ -331,6 +331,10 @@ _C.METRICS_EVALUATION.IOU_THRESHOLDS = [
     0.75, 0.80, 0.85, 0.90, 0.95
 ]
 
+# IoU threshold used to classify predictions as TP/FP/FN in visual outputs.
+# Purely for display — does not affect any metrics computation.
+_C.METRICS_EVALUATION.VIS_IOU_THRESHOLD = 0.50
+
 # Enable pipeline timing measurements
 _C.METRICS_EVALUATION.ENABLE_TIMING = True
 
@@ -359,7 +363,8 @@ _C.SINGLE_CONFIG_RUN = CN()
 
 # ID of the projection configuration to evaluate (must match an 'id' field in
 # evaluation/projection_configs_for_metrics.py)
-_C.SINGLE_CONFIG_RUN.CONFIG_ID = "grid-2x2-fov60"
+# _C.SINGLE_CONFIG_RUN.CONFIG_ID = "grid-2x2-fov60"
+_C.SINGLE_CONFIG_RUN.CONFIG_ID = "chiang-2021-baseline"
 
 # Datasets to evaluate for this configuration run
 # Options: "bomni", "piropo", "cepdof"
@@ -368,7 +373,7 @@ _C.SINGLE_CONFIG_RUN.DATASETS = ["bomni", "piropo", "cepdof"]
 # Maximum number of images to process per dataset (None = all images)
 # BOMNI has 245 frames (all used when max_images >= 245)
 # PIROPO has 3,004 frames; CEPDOF has 25,358 frames
-_C.SINGLE_CONFIG_RUN.MAX_IMAGES = 3000
+_C.SINGLE_CONFIG_RUN.MAX_IMAGES = 5000
 
 # When True, distribute sampled frames evenly across the full dataset
 # (step = total / max_images) instead of taking the first N consecutive frames.
@@ -398,6 +403,10 @@ _C.SINGLE_CONFIG_RUN.IOU_THRESHOLDS = [
     0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70,
     0.75, 0.80, 0.85, 0.90, 0.95
 ]
+
+# IoU threshold used to classify predictions as TP/FP/FN in visual outputs.
+# Purely for display — does not affect any metrics computation.
+_C.SINGLE_CONFIG_RUN.VIS_IOU_THRESHOLD = 0.50
 
 # ============================================================================
 # COMPARATOR: Compare pre-computed per-config results

@@ -1,4 +1,4 @@
-feat: add incremental per-configuration evaluation architecture
+feat: add incremental per-configuration evaluation architecture with TP/FP/FN visuals
 
 Decouples individual config runs from the comparison step so that adding
 a new projection configuration never requires re-running existing ones.
@@ -10,7 +10,12 @@ New files:
   evaluation/run_comparator.py            — entry point (reads COMPARATOR in config.py)
 
 Modified:
-  evaluation/lib/config.py               — SINGLE_CONFIG_RUN + COMPARATOR sections
+  evaluation/lib/config.py               — SINGLE_CONFIG_RUN + COMPARATOR sections;
+                                           VIS_IOU_THRESHOLD added to both sections
+  evaluation/lib/single_config_runner.py — TP/FP/FN colour-coded fisheye visuals
+  evaluation/lib/metrics_evaluator_runner.py — same visual overhaul (legacy runner)
+  evaluation/run_metrics_evaluation.py   — pass vis_iou_threshold to runner
+  evaluation/run_single_config.py        — pass vis_iou_threshold to runner
 
 Key design decisions:
 - Each config writes to evaluation/proj-conf-comparison/configs/{config_id}/
@@ -20,12 +25,19 @@ Key design decisions:
 - Sampling consistency check warns when configs used different frame subsets
 - Three independent robustness winners: Custom AP@[0.30:0.95], COCO AP@[0.50:0.95],
   Pascal VOC AP@0.50; plus a separate speed winner (FPS); equal-weight mean across datasets
-- AP used throughout instead of mAP (single class: person)
 - Metric notes appended to every comparison table and overall_winner.txt explaining
   each AP style and the rationale for the 0.30 lower bound (rotated-box IoU strictness,
   CEPDOF free-orientation bboxes)
 - OVERWRITE_EXISTING=False (default) protects already-evaluated configs
-- Legacy run_metrics_evaluation.py unchanged (backward compatible)
+
+Fisheye visual colour scheme (VIS_IOU_THRESHOLD=0.50, display-only):
+- Green (thick)  = detected GT boxes, drawn first as background reference
+- Red   (thin)   = missed GT / false negatives, labelled "FN"
+- Blue  (thin)   = true positive predictions with confidence score
+- Yellow(thin)   = false positive predictions with confidence score
+- White          = raw YOLO axis-aligned boxes on composite image
+- legend.png     = standalone white-background legend, saved once per dataset folder
+- Text placed horizontally at the top-left corner of each rotated box
 
 Also fixes pre-existing .gitignore bug: the bare `lib/` rule was silently
 excluding all of evaluation/lib/ and datasets/lib/ from version control.
