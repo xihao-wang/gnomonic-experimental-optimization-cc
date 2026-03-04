@@ -12,7 +12,7 @@ class ProjectionConfigs:
 
     CONFIGS = [
         {
-            "id": "grid-2x2-fov60",
+            "id": "stagiaire-grid-2x2-fov60",
             "name": "2x2 Grid, 60deg FOV",
             "proj_nbr": 4,
             "fov_h": 106.0,

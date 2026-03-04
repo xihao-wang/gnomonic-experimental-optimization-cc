@@ -1,0 +1,80 @@
+WINNER DETERMINATION
+============================================================
+Class       : person (single class — AP reported, not mAP)
+Aggregation : equal-weight mean across all evaluated datasets
+              (each environment contributes equally)
+
+------------------------------------------------------------
+ROBUSTNESS (Custom — AP@[0.30:0.95]  *)
+------------------------------------------------------------
+Per-dataset winners:
+  BOMNI      -> chiang-2021-baseline  (AP=0.000, n=0)
+  PIROPO     -> chiang-2021-baseline  (AP=0.000, n=0)
+  CEPDOF     -> chiang-2021-baseline  (AP=0.000, n=0)
+
+Overall ranking (equal-weight mean across datasets):
+  1. chiang-2021-baseline                mean AP=0.000
+
+WINNER: chiang-2021-baseline  (mean AP=0.000)
+
+------------------------------------------------------------
+ROBUSTNESS (COCO   — AP@[0.50:0.95]  **)
+------------------------------------------------------------
+Per-dataset winners:
+  BOMNI      -> chiang-2021-baseline  (AP=0.000, n=0)
+  PIROPO     -> chiang-2021-baseline  (AP=0.000, n=0)
+  CEPDOF     -> chiang-2021-baseline  (AP=0.000, n=0)
+
+Overall ranking (equal-weight mean across datasets):
+  1. chiang-2021-baseline                mean AP=0.000
+
+WINNER: chiang-2021-baseline  (mean AP=0.000)
+
+------------------------------------------------------------
+ROBUSTNESS (Pascal VOC — AP@0.50     ***)
+------------------------------------------------------------
+Per-dataset winners:
+  BOMNI      -> chiang-2021-baseline  (AP=0.000, n=0)
+  PIROPO     -> chiang-2021-baseline  (AP=0.000, n=0)
+  CEPDOF     -> chiang-2021-baseline  (AP=0.000, n=0)
+
+Overall ranking (equal-weight mean across datasets):
+  1. chiang-2021-baseline                mean AP=0.000
+
+WINNER: chiang-2021-baseline  (mean AP=0.000)
+
+------------------------------------------------------------
+SPEED  —  FPS (1 / mean total pipeline time per image)
+------------------------------------------------------------
+No timing data available.
+
+------------------------------------------------------------
+Statistical note:
+  BOMNI results carry lower statistical confidence (0 frames < 500 threshold).
+  PIROPO results carry lower statistical confidence (0 frames < 500 threshold).
+  CEPDOF results carry lower statistical confidence (0 frames < 500 threshold).
+
+============================================================
+METRIC NOTES
+------------
+AP@0.50          Pascal VOC style. A detection is correct if rotated IoU with
+                 the GT box is >= 0.50. Single threshold, widely used baseline.
+
+AP@[0.50:0.95]   COCO style. Mean AP across IoU thresholds 0.50, 0.55, ..., 0.95
+                 (10 thresholds, step 0.05). Industry standard for detection
+                 benchmarks. Stricter than Pascal VOC.
+
+AP@[0.30:0.95]   Custom (this project). Same as COCO but extended down to 0.30
+                 (14 thresholds). Rationale: all IoU values here are computed on
+                 ROTATED bounding boxes in fisheye space (after backprojection).
+                 Rotated-box IoU is geometrically stricter than axis-aligned IoU
+                 at the same threshold value — even a small angle or center error
+                 can drop overlap significantly. Starting from 0.30 accounts for
+                 this. Especially relevant for CEPDOF, where ground-truth boxes
+                 are NOT radially aligned (free body orientation), making the
+                 backprojected box shape less predictable than in BOMNI/PIROPO.
+
+All IoU values are computed between rotated bounding boxes in fisheye image
+space (i.e. after backprojection + Soft-NMS). These IoU thresholds are
+entirely independent of the NMS IoU parameters used inside the pipeline.
+  * Custom (this project)  ** COCO style  *** Pascal VOC style

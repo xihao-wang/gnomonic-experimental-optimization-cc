@@ -1,0 +1,12 @@
+{
+  "date": "2026-03-03T17:04:33",
+  "config_ids_compared": [
+    "chiang-2021-baseline"
+  ],
+  "datasets": [
+    "bomni",
+    "piropo",
+    "cepdof"
+  ],
+  "configs_dir": "evaluation\\proj-conf-comparison\\configs"
+}

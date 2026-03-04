@@ -1,0 +1,65 @@
+## Compte Rendu d'Activités — Optimisation de la détection piétonne en images fisheye
+
+Période couverte : Semaine du 3 mars 2026
+Projet : Identification de la meilleure configuration de projection pour détecter des piétons dans des caméras grand-angle (fisheye)
+
+
+--- Contexte rapide ---
+
+Une caméra fisheye voit très large mais déforme les images. Pour détecter des piétons, on découpe
+l'image en sous-vues moins déformées, on applique un détecteur, puis on reconstruit les détections
+dans l'image d'origine. L'objectif est de trouver le meilleur découpage possible.
+
+
+--- Activités réalisées ---
+
+1. Amélioration de la visualisation
+   Ajout d'un code couleur sur les résultats : vert = bonne détection, rouge = détection manquée,
+   bleu = correcte, jaune = fausse alarme. Facilite l'analyse visuelle des erreurs.
+   Statut : Terminé
+
+2. Échantillonnage intelligent
+   Un des jeux de données contient 25 000 images. Plutôt que de tout traiter, le système sélectionne
+   automatiquement ~3 500 images réparties uniformément pour couvrir toutes les situations en un
+   minimum de temps.
+   Statut : Terminé
+
+3. Architecture d'évaluation incrémentale
+   Séparation du processus en deux étapes indépendantes : (1) tester une configuration et sauvegarder
+   ses résultats, (2) comparer des résultats déjà calculés. Résultat : ajouter une nouvelle
+   configuration à tester ne nécessite pas de tout relancer.
+   Statut : Terminé
+
+4. Script de comparaison automatique
+   Un script identifie automatiquement la configuration gagnante selon plusieurs critères : précision
+   de détection (3 variantes) et vitesse d'exécution.
+   Statut : Terminé
+
+5. Tests préliminaires — 2 configurations
+   Évaluation de deux configurations sur 3 jeux de données (~5 500 images au total) : la configuration
+   de référence issue de la littérature (Chiang, 2021) et une configuration proposée en interne.
+   Statut : Terminé
+
+
+--- Résultats préliminaires ---
+
+Précision de détection (3 métriques) : Chiang 2021
+Vitesse d'exécution                  : Configuration interne
+
+La configuration de référence reste plus robuste sur l'ensemble des métriques de détection.
+La configuration interne est plus rapide mais détecte moins bien.
+
+
+--- Prochaines étapes ---
+
+6. Analyse des erreurs
+   Examiner les cas où les détections échouent pour comprendre les causes
+   (mauvais angle, occlusion, taille, etc.)
+
+7. Recherche d'une meilleure configuration
+   Selon l'analyse : soit corriger les erreurs identifiées par une configuration ciblée,
+   soit tester empiriquement un ensemble de configurations candidates et retenir la meilleure.
+
+
+Note : Les préparations techniques (activités 1 à 4) ont nécessité du temps mais constituent une
+infrastructure réutilisable qui accélèrera significativement les prochaines itérations de test.

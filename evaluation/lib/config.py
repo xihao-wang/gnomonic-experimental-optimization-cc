@@ -361,10 +361,11 @@ _C.METRICS_EVALUATION.SPREAD_SAMPLES = True
 
 _C.SINGLE_CONFIG_RUN = CN()
 
-# ID of the projection configuration to evaluate (must match an 'id' field in
-# evaluation/projection_configs_for_metrics.py)
-# _C.SINGLE_CONFIG_RUN.CONFIG_ID = "grid-2x2-fov60"
-_C.SINGLE_CONFIG_RUN.CONFIG_ID = "chiang-2021-baseline"
+# List of projection configuration IDs to evaluate (each must match an 'id' field in
+# evaluation/projection_configs_for_metrics.py).
+# Configs already evaluated (folder exists + OVERWRITE_EXISTING=False) are skipped
+# automatically — safe to leave previously-run IDs in the list.
+_C.SINGLE_CONFIG_RUN.CONFIG_IDS = ["chiang-2021-baseline", "stagiaire-grid-2x2-fov60"]
 
 # Datasets to evaluate for this configuration run
 # Options: "bomni", "piropo", "cepdof"

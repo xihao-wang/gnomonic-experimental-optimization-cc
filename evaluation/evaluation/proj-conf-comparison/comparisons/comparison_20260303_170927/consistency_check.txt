@@ -1,0 +1,11 @@
+SAMPLING CONSISTENCY CHECK
+============================================================
+
+Dataset: BOMNI
+  Only one config has data — nothing to compare.
+
+Dataset: PIROPO
+  Only one config has data — nothing to compare.
+
+Dataset: CEPDOF
+  Only one config has data — nothing to compare.
