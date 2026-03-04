@@ -1,22 +1,22 @@
 """
 Entry point for incremental per-configuration evaluation.
 
-Evaluates each configuration listed in SINGLE_CONFIG_RUN.CONFIG_IDS and saves
-results to evaluation/proj-conf-comparison/configs/{config_id}/ independently.
+Evaluates each configuration listed in
+METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS and saves results to
+evaluation/proj-conf-comparison/configs/{config_id}/ independently.
 
-Each configuration run is fully independent: existing results for other
-configurations are never touched. Configs whose folder already exists are
-skipped automatically (set OVERWRITE_EXISTING=True to force re-evaluation).
+Configs whose folder already exists are skipped automatically
+(set OVERWRITE_EXISTING=True to force re-evaluation).
 
 Configuration:
     - Which configs to run:
-        Edit evaluation/lib/config.py  ->  SINGLE_CONFIG_RUN.CONFIG_IDS  (list)
+        evaluation/lib/config.py  ->  METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS
 
     - Which configs exist (id, name, projection params):
-        Edit evaluation/projection_configs_for_metrics.py
+        evaluation/projection_configs_for_metrics.py
 
-    - All other run parameters (datasets, max images, output dir, etc.):
-        Edit evaluation/lib/config.py  ->  SINGLE_CONFIG_RUN section
+    - All other run parameters (datasets, model, max images, visuals, etc.):
+        evaluation/lib/config.py  ->  METRICS_EVALUATION section
 
 Usage:
     python evaluation/run_single_config.py
@@ -40,7 +40,9 @@ from evaluation.lib.single_config_runner import SingleConfigRunner
 def main():
     """Load config, resolve each requested config ID, and run evaluations."""
     cfg = get_cfg()
-    scr = cfg.SINGLE_CONFIG_RUN
+    me  = cfg.METRICS_EVALUATION
+    scr = cfg.METRICS_EVALUATION.SINGLE_CONFIG_RUN
+    vis = cfg.METRICS_EVALUATION.VIS
 
     # --- Resolve dataset roots -----------------------------------------------
     dataset_roots = {
@@ -50,62 +52,64 @@ def main():
     }
 
     # --- Load projection configurations from module --------------------------
-    proj_module = importlib.import_module(
-        cfg.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE
-    )
+    proj_module = importlib.import_module(me.PROJECTION_CONFIG_MODULE)
     all_configs = proj_module.ProjectionConfigs.CONFIGS
     all_config_ids = [c["id"] for c in all_configs]
 
     # --- Validate all requested IDs up front ---------------------------------
     requested_ids = list(scr.CONFIG_IDS)
     if not requested_ids:
-        print("ERROR: SINGLE_CONFIG_RUN.CONFIG_IDS is empty. Add at least one config ID.")
+        print("ERROR: METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS is empty.")
         sys.exit(1)
 
     missing = [cid for cid in requested_ids if cid not in all_config_ids]
     if missing:
         print(
             f"ERROR: The following CONFIG_IDS were not found in "
-            f"{cfg.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE}:\n"
+            f"{me.PROJECTION_CONFIG_MODULE}:\n"
             f"  {missing}\n"
             f"Available IDs: {all_config_ids}"
         )
         sys.exit(1)
+
+    # Per-config results are stored under OUTPUT_DIR/configs/
+    configs_output_dir = str(Path(me.OUTPUT_DIR) / "configs")
 
     # --- Print run summary ---------------------------------------------------
     print("=" * 70)
     print("INCREMENTAL MULTI-CONFIG EVALUATION")
     print("=" * 70)
     print(f"Configs     : {requested_ids}")
-    print(f"YOLO model  : {scr.YOLO_MODEL}")
-    print(f"Datasets    : {list(scr.DATASETS)}")
-    print(f"Max images  : {scr.MAX_IMAGES or 'All'} per dataset")
-    print(f"Spread smpl : {scr.SPREAD_SAMPLES}")
+    print(f"YOLO model  : {me.YOLO_MODEL}")
+    print(f"Datasets    : {list(me.DATASETS)}")
+    print(f"Max images  : {me.MAX_IMAGES or 'All'} per dataset")
+    print(f"Spread smpl : {me.SPREAD_SAMPLES}")
     print(f"Overwrite   : {scr.OVERWRITE_EXISTING}")
-    print(f"Output dir  : {scr.OUTPUT_DIR}")
+    print(f"Visuals     : {vis.ENABLE}  (IoU threshold: {vis.IOU_THRESHOLD})")
+    print(f"Output dir  : {configs_output_dir}")
     print("=" * 70)
 
     # --- Run each config in sequence -----------------------------------------
     configs_to_run = [c for c in all_configs if c["id"] in requested_ids]
-    # Preserve the order from CONFIG_IDS
     configs_to_run.sort(key=lambda c: requested_ids.index(c["id"]))
 
     ran, skipped = 0, 0
     for config in configs_to_run:
         runner = SingleConfigRunner(
             config=config,
-            yolo_model=scr.YOLO_MODEL,
-            datasets=list(scr.DATASETS),
+            yolo_model=me.YOLO_MODEL,
+            datasets=list(me.DATASETS),
             dataset_roots=dataset_roots,
-            iou_thresholds=list(scr.IOU_THRESHOLDS),
-            output_dir=scr.OUTPUT_DIR,
-            enable_timing=scr.ENABLE_TIMING,
-            enable_pr_curves=scr.ENABLE_PR_CURVES,
-            enable_visuals=scr.ENABLE_VISUALS,
-            max_images=scr.MAX_IMAGES,
-            spread_samples=scr.SPREAD_SAMPLES,
+            iou_thresholds=list(me.IOU_THRESHOLDS),
+            output_dir=configs_output_dir,
+            enable_timing=me.ENABLE_TIMING,
+            enable_pr_curves=me.ENABLE_PR_CURVES,
+            enable_visuals=vis.ENABLE,
+            max_images=me.MAX_IMAGES,
+            spread_samples=me.SPREAD_SAMPLES,
             overwrite_existing=scr.OVERWRITE_EXISTING,
-            vis_iou_threshold=scr.VIS_IOU_THRESHOLD
+            vis_iou_threshold=vis.IOU_THRESHOLD,
+            proj_boundary_colors=[tuple(c) for c in vis.PROJ_BOUNDARY_COLORS]
         )
         did_run = runner.run()
         if did_run:

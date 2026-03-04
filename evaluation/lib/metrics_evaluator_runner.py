@@ -32,6 +32,7 @@ from evaluation.lib.evaluator import DetectionEvaluator
 from evaluation.lib.aggregator import ResultsAggregator
 from evaluation.lib.metrics import match_predictions_to_ground_truth
 from detection_pipeline.pipeline import DetectionPipeline
+from image_composer.multi_persp import draw_fov_on_fisheye
 
 # Visual color/thickness constants (BGR).  Drive the fisheye output only.
 _CLR_GT   = (0, 255, 0)      # Green  — detected GT box (thick background)
@@ -64,7 +65,8 @@ class MetricsEvaluatorRunner:
         enable_visuals: bool = False,
         max_images: int = None,
         spread_samples: bool = True,
-        vis_iou_threshold: float = 0.50
+        vis_iou_threshold: float = 0.50,
+        proj_boundary_colors: List[tuple] = None
     ):
         """
         Initialize metrics evaluator runner.
@@ -84,6 +86,8 @@ class MetricsEvaluatorRunner:
                             full dataset instead of taking the first N consecutive
             vis_iou_threshold: IoU threshold used to classify TP/FP/FN in
                                visual outputs (display only, no effect on metrics)
+            proj_boundary_colors: RGB color tuples cycling across projections for
+                                  boundary overlays on fisheye visuals. None = no boundaries.
         """
         self.projection_config_module = projection_config_module
         self.yolo_model = yolo_model
@@ -97,6 +101,7 @@ class MetricsEvaluatorRunner:
         self.max_images = max_images
         self.spread_samples = spread_samples
         self.vis_iou_threshold = vis_iou_threshold
+        self.proj_boundary_colors = proj_boundary_colors or []
 
         # Load projection configurations
         self.configs = self._load_projection_configs()
@@ -395,7 +400,8 @@ class MetricsEvaluatorRunner:
                     predictions=detections,
                     config_id=config_id,
                     idx=i,
-                    dataset_name=dataset_name
+                    dataset_name=dataset_name,
+                    projection_config=config
                 )
             else:
                 detections = pipeline_result
@@ -451,7 +457,8 @@ class MetricsEvaluatorRunner:
         predictions: List[Dict],
         config_id: str,
         idx: int,
-        dataset_name: str
+        dataset_name: str,
+        projection_config: Dict = None
     ):
         """
         Save composite and fisheye visual results for one image.
@@ -503,6 +510,7 @@ class MetricsEvaluatorRunner:
         tp_gt_indices = {tp[1] for tp in true_positives}
 
         fish_viz = fisheye_image.copy()
+        fish_viz = self._draw_projection_boundaries(fish_viz, projection_config)
 
         # 1. Green (thick): detected GT boxes — drawn first as background layer
         for gt_idx in tp_gt_indices:
@@ -553,6 +561,39 @@ class MetricsEvaluatorRunner:
             cv2.putText(fish_viz, f"{score:.2f}", tl, font, 0.4, _CLR_FP, 1)
 
         cv2.imwrite(str(visuals_dir / f"{idx:05d}_fisheye.jpg"), fish_viz)
+
+    def _draw_projection_boundaries(
+        self, fisheye_img: np.ndarray, projection_config: Dict
+    ) -> np.ndarray:
+        """
+        Overlay gnomonic projection boundary outlines on a fisheye image.
+
+        Colors cycle through self.proj_boundary_colors (RGB → converted to BGR).
+        Returns the image unchanged if proj_boundary_colors is empty or
+        projection_config is None.
+        """
+        if not self.proj_boundary_colors or projection_config is None:
+            return fisheye_img
+
+        H, W = fisheye_img.shape[:2]
+        cx, cy = W / 2.0, H / 2.0
+        r = min(W, H) / 2.0
+
+        proj_nbr = projection_config.get("proj_nbr", 4)
+        lon_0    = projection_config.get("lon_0", 0.0)
+        lon_step = projection_config.get("lon_step", 90.0)
+        latitude = projection_config.get("latitude", 0.0)
+        fov_h    = projection_config.get("fov_h", 90.0)
+        fov_v    = projection_config.get("fov_v", 90.0)
+        n_colors = len(self.proj_boundary_colors)
+
+        img = fisheye_img
+        for i in range(proj_nbr):
+            longitude = lon_0 + i * lon_step
+            rgb = self.proj_boundary_colors[i % n_colors]
+            bgr = (rgb[2], rgb[1], rgb[0])
+            img = draw_fov_on_fisheye(img, cx, cy, r, longitude, latitude, fov_h, fov_v, color=bgr)
+        return img
 
     @staticmethod
     def _top_left_corner(pts: np.ndarray):

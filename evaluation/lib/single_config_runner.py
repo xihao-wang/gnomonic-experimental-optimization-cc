@@ -34,6 +34,7 @@ from evaluation.lib.evaluator import DetectionEvaluator
 from evaluation.lib.aggregator import ResultsAggregator
 from evaluation.lib.metrics import match_predictions_to_ground_truth
 from detection_pipeline.pipeline import DetectionPipeline
+from image_composer.multi_persp import draw_fov_on_fisheye
 
 # Known pipeline NMS constants (documented for reproducibility in config.json)
 _NMS_PARAMS = {
@@ -79,7 +80,8 @@ class SingleConfigRunner:
         max_images: Optional[int] = None,
         spread_samples: bool = True,
         overwrite_existing: bool = False,
-        vis_iou_threshold: float = 0.50
+        vis_iou_threshold: float = 0.50,
+        proj_boundary_colors: Optional[List[tuple]] = None
     ):
         """
         Initialize the runner.
@@ -99,6 +101,9 @@ class SingleConfigRunner:
             overwrite_existing: Overwrite if this config has already been evaluated
             vis_iou_threshold: IoU threshold used to classify TP/FP/FN in visuals
                                (display only — does not affect metrics)
+            proj_boundary_colors: RGB color tuples cycling across projections for
+                                  boundary overlays on fisheye visuals. Converted
+                                  internally to BGR for OpenCV. None = no boundaries.
         """
         self.config = config
         self.yolo_model = yolo_model
@@ -113,6 +118,7 @@ class SingleConfigRunner:
         self.spread_samples = spread_samples
         self.overwrite_existing = overwrite_existing
         self.vis_iou_threshold = vis_iou_threshold
+        self.proj_boundary_colors = proj_boundary_colors or []
 
     def run(self) -> bool:
         """
@@ -435,6 +441,7 @@ class SingleConfigRunner:
         tp_gt_indices = {tp[1] for tp in true_positives}
 
         fish_viz = fisheye_image.copy()
+        fish_viz = self._draw_projection_boundaries(fish_viz)
 
         # 1. Green (thick): detected GT boxes — drawn first as background layer
         for gt_idx in tp_gt_indices:
@@ -485,6 +492,36 @@ class SingleConfigRunner:
             cv2.putText(fish_viz, f"{score:.2f}", tl, font, 0.4, _CLR_FP, 1)
 
         cv2.imwrite(str(visuals_dir / f"{idx:05d}_fisheye.jpg"), fish_viz)
+
+    def _draw_projection_boundaries(self, fisheye_img: np.ndarray) -> np.ndarray:
+        """
+        Overlay gnomonic projection boundary outlines on a fisheye image.
+
+        Colors cycle through self.proj_boundary_colors (RGB → converted to BGR).
+        Returns the image unchanged if proj_boundary_colors is empty.
+        """
+        if not self.proj_boundary_colors:
+            return fisheye_img
+
+        H, W = fisheye_img.shape[:2]
+        cx, cy = W / 2.0, H / 2.0
+        r = min(W, H) / 2.0
+
+        proj_nbr = self.config.get("proj_nbr", 4)
+        lon_0    = self.config.get("lon_0", 0.0)
+        lon_step = self.config.get("lon_step", 90.0)
+        latitude = self.config.get("latitude", 0.0)
+        fov_h    = self.config.get("fov_h", 90.0)
+        fov_v    = self.config.get("fov_v", 90.0)
+        n_colors = len(self.proj_boundary_colors)
+
+        img = fisheye_img
+        for i in range(proj_nbr):
+            longitude = lon_0 + i * lon_step
+            rgb = self.proj_boundary_colors[i % n_colors]
+            bgr = (rgb[2], rgb[1], rgb[0])
+            img = draw_fov_on_fisheye(img, cx, cy, r, longitude, latitude, fov_h, fov_v, color=bgr)
+        return img
 
     @staticmethod
     def _top_left_corner(pts: np.ndarray):

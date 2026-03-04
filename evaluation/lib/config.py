@@ -305,35 +305,30 @@ _C.IOU_VALIDATION.BOMNI.IMAGE_CENTER_X = 320.0  # Image center (W/2, H/2), used 
 _C.IOU_VALIDATION.BOMNI.IMAGE_CENTER_Y = 240.0
 
 # ============================================================================
-# METRICS_EVALUATION: Configuration Comparison Metrics
+# METRICS_EVALUATION: Configuration comparison — shared run parameters
 # ============================================================================
 
 _C.METRICS_EVALUATION = CN()
 
 # Projection configuration module (Python file within evaluation/)
-# Default: "evaluation.projection_configs_for_metrics"
 # Can change to other config files like "evaluation.projection_configs_ablation"
 _C.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE = "evaluation.projection_configs_for_metrics"
 
 # YOLO model to use for all configurations (fixed for fair comparison)
 _C.METRICS_EVALUATION.YOLO_MODEL = "models/yolov8m.pt"
 
-# Datasets to evaluate (list of dataset names)
-_C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]  # options : "bomni", "piropo" and "cepdof".
+# Datasets to evaluate — options: "bomni", "piropo", "cepdof"
+_C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]
 
-# Output directory for metrics evaluation results
+# Root output directory (sessions and per-config result folders are created inside)
 _C.METRICS_EVALUATION.OUTPUT_DIR = "evaluation/proj-conf-comparison"
 
-# IoU thresholds for evaluation (0.30 to 0.95 with 0.05 step)
-# Starting from 0.30 to capture easier detections
+# IoU thresholds for evaluation (0.30 to 0.95 with 0.05 step, COCO-extended)
+# Starting from 0.30: rotated-box IoU is geometrically stricter than axis-aligned
 _C.METRICS_EVALUATION.IOU_THRESHOLDS = [
     0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70,
     0.75, 0.80, 0.85, 0.90, 0.95
 ]
-
-# IoU threshold used to classify predictions as TP/FP/FN in visual outputs.
-# Purely for display — does not affect any metrics computation.
-_C.METRICS_EVALUATION.VIS_IOU_THRESHOLD = 0.50
 
 # Enable pipeline timing measurements
 _C.METRICS_EVALUATION.ENABLE_TIMING = True
@@ -341,73 +336,51 @@ _C.METRICS_EVALUATION.ENABLE_TIMING = True
 # Enable precision-recall curve generation
 _C.METRICS_EVALUATION.ENABLE_PR_CURVES = True
 
-# Save visual results (composite with detections + fisheye with GT and predictions)
-# Output: {session}/visuals/{config_id}/ — flat folder, one image pair per evaluated frame
-_C.METRICS_EVALUATION.ENABLE_VISUALS = True
+# Limit number of images to process per dataset (None = all images)
+# Set to a small integer (e.g., 5) for quick smoke tests
+_C.METRICS_EVALUATION.MAX_IMAGES = 3000
 
-# Limit number of images to process (None = all images)
-# Set to integer N for quick testing (e.g., 5 for subset test)
-# Edit this value in config.py to control how many images to process
-_C.METRICS_EVALUATION.MAX_IMAGES = 3000  # Change to 5 for quick test, None for full dataset
-
-# When True, spread the sampled frames evenly across the full dataset
-# (step = total / max_images) instead of taking the first N consecutive frames.
-# Ignored when MAX_IMAGES is None (all frames are used).
+# When True, spread sampled frames evenly across the full dataset
+# (step = total / max_images). Ignored when MAX_IMAGES is None.
 _C.METRICS_EVALUATION.SPREAD_SAMPLES = True
 
-# ============================================================================
-# SINGLE_CONFIG_RUN: Incremental per-configuration evaluation
-# ============================================================================
+# ----------------------------------------------------------------------------
+# METRICS_EVALUATION.VIS: Visualization parameters (shared by all runners)
+# ----------------------------------------------------------------------------
 
-_C.SINGLE_CONFIG_RUN = CN()
+_C.METRICS_EVALUATION.VIS = CN()
 
-# List of projection configuration IDs to evaluate (each must match an 'id' field in
+# Enable saving of composite + fisheye visual image pairs
+_C.METRICS_EVALUATION.VIS.ENABLE = True
+
+# IoU threshold used to classify predictions as TP / FP / FN in visuals.
+# Display only — does not affect any metrics computation.
+_C.METRICS_EVALUATION.VIS.IOU_THRESHOLD = 0.50
+
+# Alternating colors (RGB) for projection boundary overlays on fisheye visuals.
+# Colors cycle across projections: proj 0 → colors[0], proj 1 → colors[1], proj 2 → colors[0], ...
+# (255, 174, 201) = rose,  (115, 251, 253) = light cyan
+_C.METRICS_EVALUATION.VIS.PROJ_BOUNDARY_COLORS = [(255, 174, 201), (115, 251, 253)]
+
+# ----------------------------------------------------------------------------
+# METRICS_EVALUATION.SINGLE_CONFIG_RUN: Incremental per-configuration runner
+# ----------------------------------------------------------------------------
+# All other run parameters (YOLO model, datasets, IoU thresholds, max images,
+# output dir, timing, PR curves, visuals) are inherited from METRICS_EVALUATION.
+
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
+
+# List of config IDs to evaluate (each must match an 'id' in
 # evaluation/projection_configs_for_metrics.py).
-# Configs already evaluated (folder exists + OVERWRITE_EXISTING=False) are skipped
-# automatically — safe to leave previously-run IDs in the list.
-_C.SINGLE_CONFIG_RUN.CONFIG_IDS = ["chiang-2021-baseline", "stagiaire-grid-2x2-fov60"]
-
-# Datasets to evaluate for this configuration run
-# Options: "bomni", "piropo", "cepdof"
-_C.SINGLE_CONFIG_RUN.DATASETS = ["bomni", "piropo", "cepdof"]
-
-# Maximum number of images to process per dataset (None = all images)
-# BOMNI has 245 frames (all used when max_images >= 245)
-# PIROPO has 3,004 frames; CEPDOF has 25,358 frames
-_C.SINGLE_CONFIG_RUN.MAX_IMAGES = 5000
-
-# When True, distribute sampled frames evenly across the full dataset
-# (step = total / max_images) instead of taking the first N consecutive frames.
-_C.SINGLE_CONFIG_RUN.SPREAD_SAMPLES = True
-
-# Enable pipeline timing measurements
-_C.SINGLE_CONFIG_RUN.ENABLE_TIMING = True
-
-# Enable precision-recall curve generation (individual config plots)
-_C.SINGLE_CONFIG_RUN.ENABLE_PR_CURVES = True
-
-# Save composite + fisheye visual image pairs
-_C.SINGLE_CONFIG_RUN.ENABLE_VISUALS = True
-
-# When False (default), skip evaluation if config folder already exists (safe).
-# Set to True to overwrite a previously evaluated configuration.
-_C.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = False
-
-# Root output directory for per-config results
-_C.SINGLE_CONFIG_RUN.OUTPUT_DIR = "evaluation/proj-conf-comparison/configs"
-
-# YOLO model to use (fixed for fair comparison across all configs)
-_C.SINGLE_CONFIG_RUN.YOLO_MODEL = "models/yolov8m.pt"
-
-# IoU thresholds for evaluation (0.30 to 0.95 with 0.05 step, COCO-extended)
-_C.SINGLE_CONFIG_RUN.IOU_THRESHOLDS = [
-    0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70,
-    0.75, 0.80, 0.85, 0.90, 0.95
+# Previously-run IDs are skipped automatically when OVERWRITE_EXISTING=False.
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = [
+    "TEST#01-h90-v90-g(2,3)",
+    "TEST#02_h90-v90-g(3,2)",
 ]
 
-# IoU threshold used to classify predictions as TP/FP/FN in visual outputs.
-# Purely for display — does not affect any metrics computation.
-_C.SINGLE_CONFIG_RUN.VIS_IOU_THRESHOLD = 0.50
+# When False (default), skip configs whose result folder already exists.
+# Set to True to force re-evaluation and overwrite existing results.
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = False
 
 # ============================================================================
 # COMPARATOR: Compare pre-computed per-config results

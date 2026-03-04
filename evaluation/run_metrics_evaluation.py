@@ -57,6 +57,8 @@ def main():
     print(f"Output      : {cfg.METRICS_EVALUATION.OUTPUT_DIR}")
     print("=" * 80)
 
+    vis = cfg.METRICS_EVALUATION.VIS
+
     # Create metrics evaluator runner
     runner = MetricsEvaluatorRunner(
         projection_config_module=cfg.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE,
@@ -67,10 +69,11 @@ def main():
         output_dir=cfg.METRICS_EVALUATION.OUTPUT_DIR,
         enable_timing=cfg.METRICS_EVALUATION.ENABLE_TIMING,
         enable_pr_curves=cfg.METRICS_EVALUATION.ENABLE_PR_CURVES,
-        enable_visuals=cfg.METRICS_EVALUATION.ENABLE_VISUALS,
+        enable_visuals=vis.ENABLE,
         max_images=cfg.METRICS_EVALUATION.MAX_IMAGES,
         spread_samples=cfg.METRICS_EVALUATION.SPREAD_SAMPLES,
-        vis_iou_threshold=cfg.METRICS_EVALUATION.VIS_IOU_THRESHOLD
+        vis_iou_threshold=vis.IOU_THRESHOLD,
+        proj_boundary_colors=[tuple(c) for c in vis.PROJ_BOUNDARY_COLORS]
     )
 
     # Run evaluation
