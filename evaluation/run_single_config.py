@@ -56,11 +56,8 @@ def main():
     all_configs = proj_module.ProjectionConfigs.CONFIGS
     all_config_ids = [c["id"] for c in all_configs]
 
-    # --- Validate all requested IDs up front ---------------------------------
-    requested_ids = list(scr.CONFIG_IDS)
-    if not requested_ids:
-        print("ERROR: METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS is empty.")
-        sys.exit(1)
+    # --- Resolve requested IDs (empty list = run all) ------------------------
+    requested_ids = list(scr.CONFIG_IDS) if scr.CONFIG_IDS else all_config_ids
 
     missing = [cid for cid in requested_ids if cid not in all_config_ids]
     if missing:
@@ -79,13 +76,16 @@ def main():
     print("=" * 70)
     print("INCREMENTAL MULTI-CONFIG EVALUATION")
     print("=" * 70)
-    print(f"Configs     : {requested_ids}")
+    print(f"Configs     : {'ALL' if not scr.CONFIG_IDS else requested_ids}")
     print(f"YOLO model  : {me.YOLO_MODEL}")
     print(f"Datasets    : {list(me.DATASETS)}")
     print(f"Max images  : {me.MAX_IMAGES or 'All'} per dataset")
     print(f"Spread smpl : {me.SPREAD_SAMPLES}")
     print(f"Overwrite   : {scr.OVERWRITE_EXISTING}")
     print(f"Visuals     : {vis.ENABLE}  (IoU threshold: {vis.IOU_THRESHOLD})")
+    print(f"Vis samples : BOMNI={vis.MAX_SAMPLES.BOMNI or 'all'}  "
+          f"PIROPO={vis.MAX_SAMPLES.PIROPO or 'all'}  "
+          f"CEPDOF={vis.MAX_SAMPLES.CEPDOF or 'all'}")
     print(f"Output dir  : {configs_output_dir}")
     print("=" * 70)
 
@@ -109,7 +109,12 @@ def main():
             spread_samples=me.SPREAD_SAMPLES,
             overwrite_existing=scr.OVERWRITE_EXISTING,
             vis_iou_threshold=vis.IOU_THRESHOLD,
-            proj_boundary_colors=[tuple(c) for c in vis.PROJ_BOUNDARY_COLORS]
+            proj_boundary_colors=[tuple(c) for c in vis.PROJ_BOUNDARY_COLORS],
+            vis_max_samples={
+                "bomni":  vis.MAX_SAMPLES.BOMNI,
+                "piropo": vis.MAX_SAMPLES.PIROPO,
+                "cepdof": vis.MAX_SAMPLES.CEPDOF
+            }
         )
         did_run = runner.run()
         if did_run:

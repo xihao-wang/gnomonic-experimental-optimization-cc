@@ -73,7 +73,12 @@ def main():
         max_images=cfg.METRICS_EVALUATION.MAX_IMAGES,
         spread_samples=cfg.METRICS_EVALUATION.SPREAD_SAMPLES,
         vis_iou_threshold=vis.IOU_THRESHOLD,
-        proj_boundary_colors=[tuple(c) for c in vis.PROJ_BOUNDARY_COLORS]
+        proj_boundary_colors=[tuple(c) for c in vis.PROJ_BOUNDARY_COLORS],
+        vis_max_samples={
+            "bomni":  vis.MAX_SAMPLES.BOMNI,
+            "piropo": vis.MAX_SAMPLES.PIROPO,
+            "cepdof": vis.MAX_SAMPLES.CEPDOF
+        }
     )
 
     # Run evaluation

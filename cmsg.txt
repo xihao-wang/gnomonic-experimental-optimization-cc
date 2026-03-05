@@ -1,41 +1,27 @@
-feat: add projection boundary overlays and restructure VIS config node
+feat: expand config search space, add visual sample caps, and wire empty CONFIG_IDS
 
-Visualization parameters are now consolidated under a single sub-node
-METRICS_EVALUATION.VIS (ENABLE, IOU_THRESHOLD, PROJ_BOUNDARY_COLORS),
-and SINGLE_CONFIG_RUN is nested under METRICS_EVALUATION for a clean,
-consistent hierarchy.
+— New projection configurations —
+Added TEST#05 through TEST#22 (18 new configs) covering 4-projection,
+6-projection (mirror grid pairs), and 9-projection variants. The 9-proj
+group starts from fov_h=40deg (minimum full coverage) and explores
+horizontal overlap levels, vertical FOV, and latitude independently.
 
-Projection boundaries are now drawn on every fisheye visual: each gnomonic
-sub-view's FOV outline is rendered in alternating colors (rose / light cyan
-by default, cycling across projections), giving an immediate spatial
-understanding of which detection came from which sub-view.
+— Empty CONFIG_IDS = run all —
+SINGLE_CONFIG_RUN.CONFIG_IDS = [] now resolves to every config defined in
+projection_configs_for_metrics.py, skipping folders that already exist
+(OVERWRITE_EXISTING=False). Mirrors the existing COMPARATOR behaviour.
+
+— Per-dataset visual sample cap —
+Added METRICS_EVALUATION.VIS.MAX_SAMPLES sub-node with independent limits
+for BOMNI, PIROPO, and CEPDOF (default: 50 each; 0 = no limit). The cap
+gates both return_visuals and _save_visuals — metrics are never affected.
 
 Modified:
   evaluation/lib/config.py
-    - Removed flat ENABLE_VISUALS and VIS_IOU_THRESHOLD from METRICS_EVALUATION
-    - Added METRICS_EVALUATION.VIS sub-node with ENABLE, IOU_THRESHOLD,
-      PROJ_BOUNDARY_COLORS (RGB tuples, default rose + light cyan)
-    - Moved SINGLE_CONFIG_RUN inside METRICS_EVALUATION
-
+  evaluation/projection_configs_for_metrics.py
   evaluation/run_single_config.py
-    - Updated to use METRICS_EVALUATION.VIS.* config paths
-    - Passes proj_boundary_colors to SingleConfigRunner
-
   evaluation/run_metrics_evaluation.py
-    - Updated to use METRICS_EVALUATION.VIS.* config paths
-    - Passes proj_boundary_colors to MetricsEvaluatorRunner
-
   evaluation/lib/single_config_runner.py
-    - Added proj_boundary_colors param to __init__
-    - Imports draw_fov_on_fisheye from image_composer.multi_persp
-    - Added _draw_projection_boundaries(): chains draw_fov_on_fisheye calls
-      with alternating BGR colors (converted from RGB config values)
-    - Called in _save_visuals() before GT/TP/FP/FN bbox drawing
-
   evaluation/lib/metrics_evaluator_runner.py
-    - Same proj_boundary_colors param and _draw_projection_boundaries() method
-    - _save_visuals() gains projection_config param; boundaries drawn on
-      fisheye image before bbox overlays
-    - _evaluate_configuration() passes config dict through to _save_visuals()
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

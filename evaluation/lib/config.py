@@ -362,6 +362,14 @@ _C.METRICS_EVALUATION.VIS.IOU_THRESHOLD = 0.50
 # (255, 174, 201) = rose,  (115, 251, 253) = light cyan
 _C.METRICS_EVALUATION.VIS.PROJ_BOUNDARY_COLORS = [(255, 174, 201), (115, 251, 253)]
 
+# Maximum number of visual image pairs (composite + fisheye) saved per dataset.
+# Visuals are saved for the first N evaluated images; the rest are skipped.
+# 0 = no limit (save all). Each dataset has its own handle.
+_C.METRICS_EVALUATION.VIS.MAX_SAMPLES = CN()
+_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.BOMNI  = 50
+_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.PIROPO = 50
+_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.CEPDOF = 50
+
 # ----------------------------------------------------------------------------
 # METRICS_EVALUATION.SINGLE_CONFIG_RUN: Incremental per-configuration runner
 # ----------------------------------------------------------------------------
@@ -370,13 +378,12 @@ _C.METRICS_EVALUATION.VIS.PROJ_BOUNDARY_COLORS = [(255, 174, 201), (115, 251, 25
 
 _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
 
-# List of config IDs to evaluate (each must match an 'id' in
+# Config IDs to evaluate (each must match an 'id' in
 # evaluation/projection_configs_for_metrics.py).
-# Previously-run IDs are skipped automatically when OVERWRITE_EXISTING=False.
-_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = [
-    "TEST#01-h90-v90-g(2,3)",
-    "TEST#02_h90-v90-g(3,2)",
-]
+# Empty list [] = evaluate ALL configs defined in that file.
+# Already-evaluated configs are skipped automatically when OVERWRITE_EXISTING=False,
+# so re-running with [] only processes configs that have no result folder yet.
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["TEST#26-h60-v90-g(2,3)"]
 
 # When False (default), skip configs whose result folder already exists.
 # Set to True to force re-evaluation and overwrite existing results.
@@ -389,7 +396,7 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = False
 _C.COMPARATOR = CN()
 
 # Config IDs to compare. Empty list = compare ALL configs found in OUTPUT_DIR.
-_C.COMPARATOR.CONFIG_IDS = []
+_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
 
 # Datasets to include in the comparison
 _C.COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]

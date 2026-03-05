@@ -66,7 +66,8 @@ class MetricsEvaluatorRunner:
         max_images: int = None,
         spread_samples: bool = True,
         vis_iou_threshold: float = 0.50,
-        proj_boundary_colors: List[tuple] = None
+        proj_boundary_colors: List[tuple] = None,
+        vis_max_samples: Dict[str, int] = None
     ):
         """
         Initialize metrics evaluator runner.
@@ -88,6 +89,9 @@ class MetricsEvaluatorRunner:
                                visual outputs (display only, no effect on metrics)
             proj_boundary_colors: RGB color tuples cycling across projections for
                                   boundary overlays on fisheye visuals. None = no boundaries.
+            vis_max_samples: Per-dataset cap on visual image pairs saved.
+                             Keys: "bomni", "piropo", "cepdof". Value 0 = no limit.
+                             None = no limit for all datasets.
         """
         self.projection_config_module = projection_config_module
         self.yolo_model = yolo_model
@@ -102,6 +106,7 @@ class MetricsEvaluatorRunner:
         self.spread_samples = spread_samples
         self.vis_iou_threshold = vis_iou_threshold
         self.proj_boundary_colors = proj_boundary_colors or []
+        self.vis_max_samples = vis_max_samples or {}
 
         # Load projection configurations
         self.configs = self._load_projection_configs()
@@ -375,6 +380,8 @@ class MetricsEvaluatorRunner:
         # Process each image
         per_image_results = []
         all_predictions_with_confidence = []
+        vis_limit = self.vis_max_samples.get(dataset_name, 0)
+        visuals_saved = 0
 
         for i, idx in enumerate(indices):
             # Load image and ground truth
@@ -382,15 +389,20 @@ class MetricsEvaluatorRunner:
             fisheye_image = data["image"]
             ground_truth = data["annotations"]
 
+            save_visual = (
+                self.enable_visuals
+                and (vis_limit == 0 or visuals_saved < vis_limit)
+            )
+
             # Run detection pipeline with timing
             pipeline_result = pipeline.run(
                 fisheye_image=fisheye_image,
                 projection_config=config,
                 timer=timer,
-                return_visuals=self.enable_visuals
+                return_visuals=save_visual
             )
 
-            if self.enable_visuals:
+            if save_visual:
                 detections, composite_image, raw_detections = pipeline_result
                 self._save_visuals(
                     composite_image=composite_image,
@@ -403,6 +415,7 @@ class MetricsEvaluatorRunner:
                     dataset_name=dataset_name,
                     projection_config=config
                 )
+                visuals_saved += 1
             else:
                 detections = pipeline_result
 

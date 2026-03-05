@@ -1,65 +1,56 @@
 ## Compte Rendu d'Activités — Optimisation de la détection piétonne en images fisheye
 
-Période couverte : Semaine du 3 mars 2026
+Période couverte : Journée du 4 mars 2026
 Projet : Identification de la meilleure configuration de projection pour détecter des piétons dans des caméras grand-angle (fisheye)
-
-
---- Contexte rapide ---
-
-Une caméra fisheye voit très large mais déforme les images. Pour détecter des piétons, on découpe
-l'image en sous-vues moins déformées, on applique un détecteur, puis on reconstruit les détections
-dans l'image d'origine. L'objectif est de trouver le meilleur découpage possible.
 
 
 --- Activités réalisées ---
 
-1. Amélioration de la visualisation
-   Ajout d'un code couleur sur les résultats : vert = bonne détection, rouge = détection manquée,
-   bleu = correcte, jaune = fausse alarme. Facilite l'analyse visuelle des erreurs.
+1. Amélioration de la lisibilité des résultats visuels
+   En plus du code couleur existant (bonne détection, détection manquée, fausse alarme),
+   le système affiche désormais les zones de découpage directement sur l'image d'origine.
+   L'analyste voit immédiatement quelle zone a produit quelle détection, ce qui facilite
+   le diagnostic des erreurs.
    Statut : Terminé
 
-2. Échantillonnage intelligent
-   Un des jeux de données contient 25 000 images. Plutôt que de tout traiter, le système sélectionne
-   automatiquement ~3 500 images réparties uniformément pour couvrir toutes les situations en un
-   minimum de temps.
+2. Évaluation indépendante par configuration
+   Mise en place d'un nouveau mode de fonctionnement : chaque configuration est testée
+   séparément et ses résultats sont sauvegardés. Un outil de comparaison lit ensuite ces
+   résultats sans relancer les tests. Conséquence pratique : ajouter une nouvelle
+   configuration à tester ne perturbe pas les résultats déjà obtenus.
    Statut : Terminé
 
-3. Architecture d'évaluation incrémentale
-   Séparation du processus en deux étapes indépendantes : (1) tester une configuration et sauvegarder
-   ses résultats, (2) comparer des résultats déjà calculés. Résultat : ajouter une nouvelle
-   configuration à tester ne nécessite pas de tout relancer.
+3. Définition d'un plan de test élargi et lancement automatique
+   18 nouvelles configurations ont été définies et intégrées au plan de test, couvrant
+   différents nombres de sous-vues (4, 6 et 9), différents angles de champ, différentes
+   organisations de la grille de découpage, et différents angles d'inclinaison de la
+   caméra. Les configurations sont organisées de façon à pouvoir isoler l'effet de chaque
+   paramètre indépendamment des autres.
+   Par ailleurs, le système détecte désormais automatiquement toutes les configurations
+   définies et les teste en séquence, sans qu'il soit nécessaire de les lister manuellement.
+   Les configurations déjà testées sont ignorées automatiquement.
    Statut : Terminé
 
-4. Script de comparaison automatique
-   Un script identifie automatiquement la configuration gagnante selon plusieurs critères : précision
-   de détection (3 variantes) et vitesse d'exécution.
+4. Contrôle de l'espace disque
+   Ajout d'un paramètre limitant le nombre d'images de résultats sauvegardées par jeu de
+   données, configurable indépendamment pour chacun. Évite la saturation du disque lors
+   des campagnes de test à grande échelle.
    Statut : Terminé
-
-5. Tests préliminaires — 2 configurations
-   Évaluation de deux configurations sur 3 jeux de données (~5 500 images au total) : la configuration
-   de référence issue de la littérature (Chiang, 2021) et une configuration proposée en interne.
-   Statut : Terminé
-
-
---- Résultats préliminaires ---
-
-Précision de détection (3 métriques) : Chiang 2021
-Vitesse d'exécution                  : Configuration interne
-
-La configuration de référence reste plus robuste sur l'ensemble des métriques de détection.
-La configuration interne est plus rapide mais détecte moins bien.
 
 
 --- Prochaines étapes ---
 
-6. Analyse des erreurs
-   Examiner les cas où les détections échouent pour comprendre les causes
-   (mauvais angle, occlusion, taille, etc.)
+5. Lancement de la campagne de test complète
+   Exécution de l'ensemble des configurations définies (dont les 18 nouvelles) sur les
+   trois jeux de données disponibles. Les résultats s'accumulent de façon incrémentale :
+   le test peut être interrompu et repris sans perte.
 
-7. Recherche d'une meilleure configuration
-   Selon l'analyse : soit corriger les erreurs identifiées par une configuration ciblée,
-   soit tester empiriquement un ensemble de configurations candidates et retenir la meilleure.
+6. Analyse comparative et sélection de la meilleure configuration
+   Une fois les tests terminés, le comparateur produit automatiquement un classement par
+   critère (précision, rappel, vitesse). L'analyse des résultats guidera vers la
+   configuration optimale ou orientera un éventuel affinage supplémentaire.
 
 
-Note : Les préparations techniques (activités 1 à 4) ont nécessité du temps mais constituent une
-infrastructure réutilisable qui accélèrera significativement les prochaines itérations de test.
+Note : L'infrastructure de test mise en place est désormais stable et réutilisable.
+Les prochaines journées seront principalement consacrées à l'exploitation des résultats
+plutôt qu'au développement.

@@ -81,7 +81,8 @@ class SingleConfigRunner:
         spread_samples: bool = True,
         overwrite_existing: bool = False,
         vis_iou_threshold: float = 0.50,
-        proj_boundary_colors: Optional[List[tuple]] = None
+        proj_boundary_colors: Optional[List[tuple]] = None,
+        vis_max_samples: Optional[Dict[str, int]] = None
     ):
         """
         Initialize the runner.
@@ -104,6 +105,9 @@ class SingleConfigRunner:
             proj_boundary_colors: RGB color tuples cycling across projections for
                                   boundary overlays on fisheye visuals. Converted
                                   internally to BGR for OpenCV. None = no boundaries.
+            vis_max_samples: Per-dataset cap on visual image pairs saved.
+                             Keys: "bomni", "piropo", "cepdof". Value 0 = no limit.
+                             None = no limit for all datasets.
         """
         self.config = config
         self.yolo_model = yolo_model
@@ -119,6 +123,7 @@ class SingleConfigRunner:
         self.overwrite_existing = overwrite_existing
         self.vis_iou_threshold = vis_iou_threshold
         self.proj_boundary_colors = proj_boundary_colors or []
+        self.vis_max_samples = vis_max_samples or {}
 
     def run(self) -> bool:
         """
@@ -312,20 +317,27 @@ class SingleConfigRunner:
 
         per_image_results = []
         all_predictions_with_confidence = []
+        vis_limit = self.vis_max_samples.get(dataset_name, 0)
+        visuals_saved = 0
 
         for i, idx in enumerate(indices):
             data = dataset[idx]
             fisheye_image = data["image"]
             ground_truth = data["annotations"]
 
+            save_visual = (
+                self.enable_visuals
+                and (vis_limit == 0 or visuals_saved < vis_limit)
+            )
+
             pipeline_result = pipeline.run(
                 fisheye_image=fisheye_image,
                 projection_config=self.config,
                 timer=timer,
-                return_visuals=self.enable_visuals
+                return_visuals=save_visual
             )
 
-            if self.enable_visuals:
+            if save_visual:
                 detections, composite_image, raw_detections = pipeline_result
                 self._save_visuals(
                     composite_image=composite_image,
@@ -337,6 +349,7 @@ class SingleConfigRunner:
                     idx=i,
                     dataset_out_dir=self.output_dir / config_id / dataset_name
                 )
+                visuals_saved += 1
             else:
                 detections = pipeline_result
 
