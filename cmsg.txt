@@ -1,27 +1,14 @@
-feat: expand config search space, add visual sample caps, and wire empty CONFIG_IDS
+feat: add black padding per projection cell (hypothesis) and TEST#27
 
-— New projection configurations —
-Added TEST#05 through TEST#22 (18 new configs) covering 4-projection,
-6-projection (mirror grid pairs), and 9-projection variants. The 9-proj
-group starts from fov_h=40deg (minimum full coverage) and explores
-horizontal overlap levels, vertical FOV, and latitude independently.
-
-— Empty CONFIG_IDS = run all —
-SINGLE_CONFIG_RUN.CONFIG_IDS = [] now resolves to every config defined in
-projection_configs_for_metrics.py, skipping folders that already exist
-(OVERWRITE_EXISTING=False). Mirrors the existing COMPARATOR behaviour.
-
-— Per-dataset visual sample cap —
-Added METRICS_EVALUATION.VIS.MAX_SAMPLES sub-node with independent limits
-for BOMNI, PIROPO, and CEPDOF (default: 50 each; 0 = no limit). The cap
-gates both return_visuals and _save_visuals — metrics are never affected.
+Black padding reduces aspect-ratio stretching in elongated grid cells.
+Content is rasterised at reduced resolution directly; mapping matrices
+are padded to cell size so backprojection needs no changes.
+Configurable per-axis via pad_direction/pad_pct in any config dict.
+TEST#27 = TEST#26 + 14% vertical padding, for comparison.
 
 Modified:
-  evaluation/lib/config.py
+  image_composer/config.py
+  image_composer/multi_persp.py
   evaluation/projection_configs_for_metrics.py
-  evaluation/run_single_config.py
-  evaluation/run_metrics_evaluation.py
-  evaluation/lib/single_config_runner.py
-  evaluation/lib/metrics_evaluator_runner.py
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

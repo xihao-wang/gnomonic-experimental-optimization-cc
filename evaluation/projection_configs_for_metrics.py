@@ -409,5 +409,21 @@ class ProjectionConfigs:
         "grid": [2, 3],
         "comp_sz": [640, 640],
         "target_mp": "auto"
+    },
+    {
+        "id": "TEST#27-h60-v85-g(2,3)-pad14v",
+        "name": "TEST#26 + 14% vertical padding (6 proj, 2x3 grid, 60x85 FOV, lat45)",
+        "proj_nbr": 6,
+        "fov_h": 60.0,
+        "fov_v": 90.0,
+        "latitude": 45.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 6,
+        "grid": [2, 3],
+        "comp_sz": [640, 640],
+        "target_mp": "auto",
+        "pad_direction": "vertical",
+        "pad_pct": 0.14
     }
+
     ]

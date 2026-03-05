@@ -63,7 +63,8 @@ def compute_viewing_basis(longitude, latitude):
     return np.column_stack((-R, U, view_vector))  # -R avoids projection mirroring
 
 
-def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48, grid=None, comp_sz=None):
+def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48, grid=None, comp_sz=None,
+                         pad_pct_h=0.0, pad_pct_v=0.0):
     """
     Calculate output dimensions based on FOV and target megapixels.
 
@@ -72,7 +73,9 @@ def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48, grid=None, comp_s
     :param target_mp: Target megapixels (default 0.48) or 'auto' for automatic sizing based on grid and comp_sz
     :param grid: Grid layout (rows, cols) for auto sizing
     :param comp_sz: Composite size (width, height) for auto sizing
-    :return: Tuple of (width, height) in pixels
+    :param pad_pct_h: Fraction of cell width reserved for horizontal black padding (0.0 = none)
+    :param pad_pct_v: Fraction of cell height reserved for vertical black padding (0.0 = none)
+    :return: Tuple of (width, height) in pixels — the content area, excluding padding
     """
     # Calculate the aspect ratio based on FOV
     aspect_ratio = fov_h_deg / fov_v_deg
@@ -82,15 +85,16 @@ def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48, grid=None, comp_s
         rows, cols = grid
         comp_width, comp_height = comp_sz
 
-        # Calculate the maximum width and height of each projection
-        # This is the exact division of the composite size by the grid dimensions
-        width = int(comp_width / cols)
-        height = int(comp_height / rows)
+        # Cell size: exact share of the composite for this projection
+        cell_w = int(comp_width / cols)
+        cell_h = int(comp_height / rows)
 
-        # No need to adjust dimensions - we want to exactly fill the composite
-        # This ensures that when projections are arranged in the grid and resized,
-        # they will perfectly match the desired composite size
-        return (width, height)
+        # Content size: subtract the padding budget so the projection is rasterised
+        # at reduced resolution directly — no wasted computation on pixels that will
+        # be replaced by black borders.  _apply_projection_padding() adds them back.
+        content_w = max(1, int(cell_w * (1.0 - pad_pct_h)))
+        content_h = max(1, int(cell_h * (1.0 - pad_pct_v)))
+        return (content_w, content_h)
 
     # Standard mode: calculate based on target megapixels
     # Solving: width * height = target_mp * 1,000,000 and width = aspect_ratio * height
@@ -109,7 +113,7 @@ def calculate_dimensions(fov_h_deg, fov_v_deg, target_mp=0.48, grid=None, comp_s
 
 
 def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg, target_mp=0.48, grid=None,
-                           comp_sz=None):
+                           comp_sz=None, pad_pct_h=0.0, pad_pct_v=0.0):
     """
     Project a perspective view from a top-view fisheye image.
 
@@ -124,10 +128,12 @@ def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_de
     :param target_mp: Target megapixels for output image or 'auto'
     :param grid: Grid layout for auto sizing
     :param comp_sz: Composite size for auto sizing
+    :param pad_pct_h: Fraction of cell width reserved for horizontal black padding (passed to calculate_dimensions)
+    :param pad_pct_v: Fraction of cell height reserved for vertical black padding (passed to calculate_dimensions)
     :return: Perspective projection image, latency, and mapping matrices
     """
-    # Calculate output dimensions based on FOV ratio
-    output_size = calculate_dimensions(fov_h_deg, fov_v_deg, target_mp, grid, comp_sz)
+    # Calculate output dimensions based on FOV ratio (content area only, excluding padding)
+    output_size = calculate_dimensions(fov_h_deg, fov_v_deg, target_mp, grid, comp_sz, pad_pct_h, pad_pct_v)
     W_out, H_out = output_size
 
     rot_matrix = compute_viewing_basis(longitude, latitude)
@@ -616,6 +622,49 @@ def create_composite_image(projections, grid, comp_sz):
     return composite, resized_composite
 
 
+def _apply_projection_padding(projection, map_x, map_y, cell_w, cell_h):
+    """
+    Add black padding to a projection image and extend its mapping matrices to cell size.
+
+    The projection content is centred within the cell.  Padding pixels in the mapping
+    matrices are set to 0.0 — they reference the fisheye image origin, which lies
+    outside the fisheye circle and is never a real detection area.
+
+    Backprojection is unaffected: backprojection.py reads proj_width/proj_height from
+    mapping_matrices.shape, which equals cell_w/cell_h after padding, so the
+    composite-to-projection coordinate conversion remains a 1:1 pass-through.
+
+    :param projection: Projection image at content resolution (content_h x content_w)
+    :param map_x: Horizontal fisheye mapping for the projection content
+    :param map_y: Vertical fisheye mapping for the projection content
+    :param cell_w: Target cell width in the composite (pixels)
+    :param cell_h: Target cell height in the composite (pixels)
+    :return: (padded_projection, padded_map_x, padded_map_y) all at (cell_h x cell_w)
+    """
+    content_h, content_w = projection.shape[:2]
+    pad_v = cell_h - content_h
+    pad_h = cell_w - content_w
+
+    if pad_v == 0 and pad_h == 0:
+        return projection, map_x, map_y
+
+    pad_top    = pad_v // 2
+    pad_bottom = pad_v - pad_top
+    pad_left   = pad_h // 2
+    pad_right  = pad_h - pad_left
+
+    padded_proj = cv2.copyMakeBorder(
+        projection, pad_top, pad_bottom, pad_left, pad_right,
+        cv2.BORDER_CONSTANT, value=0
+    )
+    padded_map_x = np.pad(map_x, ((pad_top, pad_bottom), (pad_left, pad_right)),
+                          constant_values=0.0).astype(np.float32)
+    padded_map_y = np.pad(map_y, ((pad_top, pad_bottom), (pad_left, pad_right)),
+                          constant_values=0.0).astype(np.float32)
+
+    return padded_proj, padded_map_x, padded_map_y
+
+
 def generate_rainbow_colors(n):
     """
     Generate n distinct colors in rainbow-like sequence.
@@ -679,7 +728,9 @@ def load_configuration():
         "grid": config.GRID,
         "comp_sz": config.COMP_SZ,
         "target_mp": config.TARGET_MP,
-        "output_dir": config.OUTPUT_DIR
+        "output_dir": config.OUTPUT_DIR,
+        "pad_direction": getattr(config, "PADDING_DIRECTION", "none"),
+        "pad_pct": getattr(config, "PADDING_PCT", 0.0),
     }
 
     # Print custom configuration details
@@ -723,12 +774,30 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
     comp_sz = cfg_dict["comp_sz"]
     target_mp = cfg_dict["target_mp"]
 
+    # Padding
+    pad_direction = cfg_dict.get("pad_direction", "none")
+    pad_pct_raw   = cfg_dict.get("pad_pct", 0.0)
+    if pad_direction == "vertical":
+        pad_pct_v, pad_pct_h = float(pad_pct_raw), 0.0
+    elif pad_direction == "horizontal":
+        pad_pct_v, pad_pct_h = 0.0, float(pad_pct_raw)
+    elif pad_direction == "both":
+        pad_pct_v = float(pad_pct_raw[0])
+        pad_pct_h = float(pad_pct_raw[1])
+    else:
+        pad_pct_v, pad_pct_h = 0.0, 0.0
+
     # Validate proj_nbr
     if not is_valid_proj_nbr(proj_nbr):
         raise ValueError(f"Invalid number of projections ({proj_nbr}). Must be even or have integer square root.")
 
     # Determine grid layout
     grid = determine_grid(proj_nbr, grid)
+
+    # Cell dimensions (used when applying padding)
+    grid_rows, grid_cols = grid
+    cell_w_px = int(comp_sz[0] / grid_cols)
+    cell_h_px = int(comp_sz[1] / grid_rows)
 
     # Load fisheye image (if not provided)
     if fisheye_img is None:
@@ -750,8 +819,14 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
         longitude = (lon_0 + i * lon_step) % 360
         projection, latency, mapping = fisheye_to_perspective(
             fisheye_img, cx, cy, r, longitude, latitude,
-            fov_h, fov_v, target_mp, grid, comp_sz
+            fov_h, fov_v, target_mp, grid, comp_sz, pad_pct_h, pad_pct_v
         )
+        if pad_pct_v > 0.0 or pad_pct_h > 0.0:
+            map_x, map_y = mapping
+            projection, map_x, map_y = _apply_projection_padding(
+                projection, map_x, map_y, cell_w_px, cell_h_px
+            )
+            mapping = (map_x, map_y)
         projections.append(projection)
         mapping_matrices.append(mapping)
 
@@ -781,6 +856,8 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
         'lon_step': lon_step,
         'comp_sz': comp_sz,
         'mapping_matrices': combined_maps,
+        'pad_pct_v': pad_pct_v,
+        'pad_pct_h': pad_pct_h,
     }
 
     return resized_composite, metadata
@@ -803,6 +880,18 @@ def main():
     target_mp = cfg["target_mp"]
     output_dir = cfg["output_dir"]
 
+    pad_direction = cfg.get("pad_direction", "none")
+    pad_pct_raw   = cfg.get("pad_pct", 0.0)
+    if pad_direction == "vertical":
+        pad_pct_v, pad_pct_h = float(pad_pct_raw), 0.0
+    elif pad_direction == "horizontal":
+        pad_pct_v, pad_pct_h = 0.0, float(pad_pct_raw)
+    elif pad_direction == "both":
+        pad_pct_v = float(pad_pct_raw[0])
+        pad_pct_h = float(pad_pct_raw[1])
+    else:
+        pad_pct_v, pad_pct_h = 0.0, 0.0
+
     # Validate proj_nbr
     if not is_valid_proj_nbr(proj_nbr):
         print(f"Error: Invalid number of projections ({proj_nbr}).")
@@ -811,6 +900,11 @@ def main():
 
     # Determine grid layout
     grid = determine_grid(proj_nbr, grid)
+
+    # Cell dimensions (used when applying padding)
+    grid_rows, grid_cols = grid
+    cell_w_px = int(comp_sz[0] / grid_cols)
+    cell_h_px = int(comp_sz[1] / grid_rows)
 
     # Load fisheye image
     fisheye_img = cv2.imread(img_path)
@@ -855,7 +949,14 @@ def main():
         f.write(f"- Longitude Step: {lon_step} degrees\n")
         f.write(f"- Grid Layout: {grid[0]} rows x {grid[1]} columns\n")
         f.write(f"- Composite Size: {comp_sz[0]}x{comp_sz[1]} pixels\n")
-        f.write(f"- Target MP per projection: {target_mp}\n\n")
+        f.write(f"- Target MP per projection: {target_mp}\n")
+        f.write(f"- Padding direction: {pad_direction}\n")
+        if pad_pct_v > 0.0 or pad_pct_h > 0.0:
+            f.write(f"- Padding vertical: {pad_pct_v * 100:.1f}% ({int(cell_h_px * pad_pct_v)}px total, "
+                    f"{int(cell_h_px * pad_pct_v) // 2}px each side)\n")
+            f.write(f"- Padding horizontal: {pad_pct_h * 100:.1f}% ({int(cell_w_px * pad_pct_h)}px total, "
+                    f"{int(cell_w_px * pad_pct_h) // 2}px each side)\n")
+        f.write("\n")
 
         # Calculate and log coverage information
         overlap, uncovered = calculate_coverage(lon_0, lon_step, proj_nbr,
@@ -878,11 +979,17 @@ def main():
         # Calculate longitude for this projection
         longitude = (lon_0 + i * lon_step) % 360
 
-        # Generate projection
+        # Generate projection (at content resolution, padding budget already subtracted)
         projection, latency, mapping = fisheye_to_perspective(
             fisheye_img, cx, cy, r, longitude, latitude,
-            fov_h, fov_v, target_mp, grid, comp_sz
+            fov_h, fov_v, target_mp, grid, comp_sz, pad_pct_h, pad_pct_v
         )
+        if pad_pct_v > 0.0 or pad_pct_h > 0.0:
+            map_x, map_y = mapping
+            projection, map_x, map_y = _apply_projection_padding(
+                projection, map_x, map_y, cell_w_px, cell_h_px
+            )
+            mapping = (map_x, map_y)
         projections.append(projection)
         mapping_matrices.append(mapping)
         total_latency += latency

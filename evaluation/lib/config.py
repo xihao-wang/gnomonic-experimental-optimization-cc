@@ -383,7 +383,7 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
 # Empty list [] = evaluate ALL configs defined in that file.
 # Already-evaluated configs are skipped automatically when OVERWRITE_EXISTING=False,
 # so re-running with [] only processes configs that have no result folder yet.
-_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["TEST#26-h60-v90-g(2,3)"]
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["TEST#28-h60-v85-g(2,3)-pad0v"]
 
 # When False (default), skip configs whose result folder already exists.
 # Set to True to force re-evaluation and overwrite existing results.
@@ -396,7 +396,8 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = False
 _C.COMPARATOR = CN()
 
 # Config IDs to compare. Empty list = compare ALL configs found in OUTPUT_DIR.
-_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
+# _C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)", "TEST#27-h60-v85-g(2,3)-pad14v"]
+_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)", "TEST#27-h60-v85-g(2,3)-pad14v", "TEST#28-h60-v85-g(2,3)-pad0v"]
 
 # Datasets to include in the comparison
 _C.COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]

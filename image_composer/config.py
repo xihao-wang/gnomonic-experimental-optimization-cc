@@ -51,3 +51,23 @@ TARGET_MP = 'auto'
 
 # Output options
 OUTPUT_DIR = "multi-persp-out"  # Base output directory
+
+# ============================================================================
+# PROJECTION PADDING
+# ============================================================================
+# Add black padding inside each projection cell to reduce aspect-ratio
+# stretching (e.g. a 2×4 grid produces tall-narrow cells that compress
+# pedestrians vertically; padding centres the content and avoids distortion).
+#
+# The projection content is rasterised at reduced resolution directly so that
+# no extra remapping or rescaling is performed.  Requires TARGET_MP = 'auto'.
+#
+# PADDING_DIRECTION : "none" | "vertical" | "horizontal" | "both"
+# PADDING_PCT       : fraction of the cell dimension to use as total black
+#                     border (split evenly on both sides of that axis).
+#                     Single float  for "vertical" or "horizontal".
+#                     [v_pct, h_pct] list for "both".
+#                     Example: 0.10 → 10% total → 5% black bar on each side.
+
+PADDING_DIRECTION = "none"
+PADDING_PCT = 0.10
