@@ -9,12 +9,11 @@ Configuration:
     - Which configs to compare (empty = all found automatically):
         Edit evaluation/lib/config.py  ->  COMPARATOR.CONFIG_IDS
 
-    - Where pre-computed results live:
-        evaluation/lib/config.py  ->  COMPARATOR.OUTPUT_DIR
-        (must match SINGLE_CONFIG_RUN.OUTPUT_DIR)
-
-    - Comparison outputs are written to:
-        evaluation/lib/config.py  ->  COMPARATOR.COMPARISON_OUT_DIR
+    - Where pre-computed results live and where comparisons are written:
+        Derived automatically from:
+          METRICS_EVALUATION.OUTPUT_DIR / <model_label> / "configs"
+          METRICS_EVALUATION.OUTPUT_DIR / <model_label> / "comparisons"
+        where <model_label> = Path(METRICS_EVALUATION.YOLO_MODEL).stem
 
 Usage:
     python evaluation/run_comparator.py
@@ -37,7 +36,14 @@ from evaluation.lib.comparator import ConfigComparator
 def main():
     """Load config and run the comparator."""
     cfg = get_cfg()
+    me  = cfg.METRICS_EVALUATION
     cmp = cfg.COMPARATOR
+
+    # Derive directories from METRICS_EVALUATION so they always stay in sync
+    # with run_single_config.py (same model label, same root).
+    model_label = Path(me.YOLO_MODEL).stem
+    configs_dir = Path(me.OUTPUT_DIR) / model_label / "configs"
+    comparison_out_dir = Path(me.OUTPUT_DIR) / model_label / "comparisons"
 
     config_ids = list(cmp.CONFIG_IDS)  # empty list = compare all found
 
@@ -47,16 +53,17 @@ def main():
     if config_ids:
         print(f"Comparing   : {config_ids}")
     else:
-        print("Comparing   : ALL configs found in output dir (auto-discover)")
+        print("Comparing   : ALL configs found in results dir (auto-discover)")
     print(f"Datasets    : {list(cmp.DATASETS)}")
-    print(f"Results dir : {cmp.OUTPUT_DIR}")
-    print(f"Output dir  : {cmp.COMPARISON_OUT_DIR}")
+    print(f"Model label : {model_label}")
+    print(f"Results dir : {configs_dir}")
+    print(f"Output dir  : {comparison_out_dir}")
     print(f"Figures     : {cmp.ENABLE_FIGURES}")
     print("=" * 70)
 
     comparator = ConfigComparator(
-        configs_dir=cmp.OUTPUT_DIR,
-        comparison_out_dir=cmp.COMPARISON_OUT_DIR,
+        configs_dir=str(configs_dir),
+        comparison_out_dir=str(comparison_out_dir),
         config_ids=config_ids if config_ids else None,
         datasets=list(cmp.DATASETS) if cmp.DATASETS else None,
         enable_figures=cmp.ENABLE_FIGURES

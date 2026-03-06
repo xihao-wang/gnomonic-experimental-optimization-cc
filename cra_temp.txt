@@ -6,9 +6,19 @@ Projet : Identification de la meilleure configuration de projection pour détect
 
 --- Activités réalisées ---
 
-1. Hypothèse d'amélioration : rembourrage noir dans les cellules de projection
-   Un rembourrage noir configurable a été ajouté pour réduire la déformation
-   des piétons dans les grilles aux proportions allongées. Un test comparatif
-   (TEST#27) a été défini pour vérifier si cette hypothèse améliore les résultats.
+1. Extension du module de composition d'images (image_composer)
+   Deux nouvelles fonctionnalités ont été ajoutées pour élargir l'espace de
+   configurations testables :
+   - Rembourrage noir par cellule (padding) : réduit la déformation des piétons
+     dans les grilles allongées ; rastérisation directe à résolution réduite
+     pour préserver l'efficacité de calcul (TEST#27).
+   - Projections à paramètres libres (extra_projections) : permet de définir
+     des vues à latitude, champ de vision et position dans la grille
+     personnalisés, en combinaison avec les vues uniformes — par exemple une
+     vue centrale au nadir et des vues périphériques (TEST#28, TEST#29).
+     Rétrocompatible avec toutes les configurations existantes.
+   Statut : Terminé
+
+2. Suivi et réunion avec le stagiaire Xihao Wang
    Statut : Terminé
 

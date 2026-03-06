@@ -1,14 +1,21 @@
-feat: add black padding per projection cell (hypothesis) and TEST#27
+feat: add flexible per-projection config with extra_projections and TEST#28
 
-Black padding reduces aspect-ratio stretching in elongated grid cells.
-Content is rasterised at reduced resolution directly; mapping matrices
-are padded to cell size so backprojection needs no changes.
-Configurable per-axis via pad_direction/pad_pct in any config dict.
-TEST#27 = TEST#26 + 14% vertical padding, for comparison.
+Introduces resolve_proj_list() as a shared helper that builds the ordered
+per-slot projection list from a config dict. Supports two modes:
+- Uniform (existing): all projections share latitude/FOV, spaced by lon_step
+- Mixed (new): extra_projections list with per-slot longitude/latitude/FOV
+  and optional pos:[row,col] for grid placement; remaining slots filled
+  uniformly. Backward-compatible with all existing configs.
+
+TEST#28: 1 nadir projection (lat=0, 90x90 FOV, slot [0,0]) + 5 peripheral
+projections at lat=45, 60x85 FOV — hypothesis: dedicated nadir sub-view
+improves recall for pedestrians directly under the camera.
 
 Modified:
-  image_composer/config.py
-  image_composer/multi_persp.py
-  evaluation/projection_configs_for_metrics.py
+  image_composer/multi_persp.py        (resolve_proj_list, generate_composite_from_config, main)
+  image_composer/__init__.py           (export resolve_proj_list)
+  evaluation/lib/single_config_runner.py    (_draw_projection_boundaries)
+  evaluation/lib/metrics_evaluator_runner.py (_draw_projection_boundaries)
+  evaluation/projection_configs_for_metrics.py (add TEST#28)
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

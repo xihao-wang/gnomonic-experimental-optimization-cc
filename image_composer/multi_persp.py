@@ -751,6 +751,84 @@ def load_configuration():
     return custom_config
 
 
+def resolve_proj_list(cfg_dict):
+    """
+    Build the ordered per-slot projection parameter list from a config dict.
+
+    Supports two modes (both backward-compatible with existing configs):
+
+    1. Uniform (existing behaviour, no "extra_projections" key):
+       All proj_nbr projections share the same latitude/fov_h/fov_v and are
+       spaced uniformly by lon_step starting at lon_0.
+
+    2. Mixed (new): "extra_projections" list of dicts with per-slot overrides.
+       Each extra dict must have: longitude, latitude, fov_h, fov_v.
+       Optional "pos": [row, col] (zero-indexed) — defaults to [0, 0].
+       Extra projections are placed at their reserved grid slots; the remaining
+       slots are filled with uniform projections in order.
+
+    Args:
+        cfg_dict: Projection configuration dict.
+
+    Returns:
+        List of dicts, one per grid slot in slot order (slot 0 = top-left cell).
+        Each dict has keys: longitude, latitude, fov_h, fov_v.
+
+    Raises:
+        ValueError: On invalid slot positions, duplicates, or slot count mismatch.
+    """
+    proj_nbr        = cfg_dict["proj_nbr"]
+    fov_h           = cfg_dict.get("fov_h", 90.0)
+    fov_v           = cfg_dict.get("fov_v", 90.0)
+    latitude        = cfg_dict.get("latitude", 45.0)
+    lon_0           = cfg_dict.get("lon_0", 0.0)
+    lon_step        = cfg_dict.get("lon_step", 360.0 / max(proj_nbr, 1))
+    grid            = cfg_dict["grid"]
+    extra_projs     = cfg_dict.get("extra_projections", [])
+    n_total         = proj_nbr + len(extra_projs)
+
+    resolved_grid   = determine_grid(n_total, grid)
+    grid_rows, grid_cols = resolved_grid
+
+    if grid_rows * grid_cols != n_total:
+        raise ValueError(
+            f"Grid {list(resolved_grid)} has {grid_rows * grid_cols} slots but "
+            f"proj_nbr ({proj_nbr}) + extra_projections ({len(extra_projs)}) = {n_total}."
+        )
+
+    reserved = {}
+    for ep in extra_projs:
+        row, col = ep.get("pos", [0, 0])
+        if not (0 <= row < grid_rows and 0 <= col < grid_cols):
+            raise ValueError(
+                f"extra_projections pos [{row},{col}] is out of bounds "
+                f"for grid {list(resolved_grid)}."
+            )
+        slot_idx = row * grid_cols + col
+        if slot_idx in reserved:
+            raise ValueError(f"extra_projections: duplicate pos [{row},{col}].")
+        reserved[slot_idx] = {
+            "longitude": ep["longitude"], "latitude": ep["latitude"],
+            "fov_h":     ep["fov_h"],     "fov_v":    ep["fov_v"],
+        }
+
+    proj_list = []
+    uniform_idx = 0
+    for slot_idx in range(n_total):
+        if slot_idx in reserved:
+            proj_list.append(reserved[slot_idx])
+        else:
+            proj_list.append({
+                "longitude": (lon_0 + uniform_idx * lon_step) % 360,
+                "latitude":  latitude,
+                "fov_h":     fov_h,
+                "fov_v":     fov_v,
+            })
+            uniform_idx += 1
+
+    return proj_list
+
+
 def generate_composite_from_config(cfg_dict, fisheye_img=None):
     """
     Generate composite image from configuration dictionary (programmatic API).
@@ -763,16 +841,22 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
     Returns:
         (resized_composite, metadata) where metadata includes mapping_matrices for backprojection
     """
-    img_path = cfg_dict.get("img_path")
-    proj_nbr = cfg_dict["proj_nbr"]
-    fov_h = cfg_dict["fov_h"]
-    fov_v = cfg_dict["fov_v"]
-    latitude = cfg_dict["latitude"]
-    lon_0 = cfg_dict["lon_0"]
-    lon_step = cfg_dict["lon_step"]
-    grid = cfg_dict["grid"]
-    comp_sz = cfg_dict["comp_sz"]
+    img_path  = cfg_dict.get("img_path")
+    comp_sz   = cfg_dict["comp_sz"]
     target_mp = cfg_dict["target_mp"]
+
+    # Resolve the ordered per-slot projection list (handles extra_projections)
+    proj_list = resolve_proj_list(cfg_dict)
+    n_total   = len(proj_list)
+    grid      = determine_grid(n_total, cfg_dict["grid"])
+    grid_rows, grid_cols = grid
+
+    # Keep uniform params available for metadata (may be absent in pure-extra configs)
+    fov_h    = cfg_dict.get("fov_h", 90.0)
+    fov_v    = cfg_dict.get("fov_v", 90.0)
+    latitude = cfg_dict.get("latitude", 45.0)
+    lon_0    = cfg_dict.get("lon_0", 0.0)
+    lon_step = cfg_dict.get("lon_step", 360.0 / max(cfg_dict["proj_nbr"], 1))
 
     # Padding
     pad_direction = cfg_dict.get("pad_direction", "none")
@@ -787,15 +871,7 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
     else:
         pad_pct_v, pad_pct_h = 0.0, 0.0
 
-    # Validate proj_nbr
-    if not is_valid_proj_nbr(proj_nbr):
-        raise ValueError(f"Invalid number of projections ({proj_nbr}). Must be even or have integer square root.")
-
-    # Determine grid layout
-    grid = determine_grid(proj_nbr, grid)
-
     # Cell dimensions (used when applying padding)
-    grid_rows, grid_cols = grid
     cell_w_px = int(comp_sz[0] / grid_cols)
     cell_h_px = int(comp_sz[1] / grid_rows)
 
@@ -815,11 +891,12 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
     projections = []
     mapping_matrices = []
 
-    for i in range(proj_nbr):
-        longitude = (lon_0 + i * lon_step) % 360
+    for proj_params in proj_list:
         projection, latency, mapping = fisheye_to_perspective(
-            fisheye_img, cx, cy, r, longitude, latitude,
-            fov_h, fov_v, target_mp, grid, comp_sz, pad_pct_h, pad_pct_v
+            fisheye_img, cx, cy, r,
+            proj_params["longitude"], proj_params["latitude"],
+            proj_params["fov_h"],     proj_params["fov_v"],
+            target_mp, grid, comp_sz, pad_pct_h, pad_pct_v
         )
         if pad_pct_v > 0.0 or pad_pct_h > 0.0:
             map_x, map_y = mapping
@@ -833,8 +910,8 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
     # Create composite image
     composite, resized_composite = create_composite_image(projections, grid, comp_sz)
 
-    # Create combined mapping matrices array [proj_nbr, 2, height, width]
-    combined_maps = np.zeros((proj_nbr, 2,
+    # Create combined mapping matrices array [n_total, 2, height, width]
+    combined_maps = np.zeros((n_total, 2,
                               mapping_matrices[0][0].shape[0],
                               mapping_matrices[0][0].shape[1]), dtype=np.float32)
 
@@ -847,7 +924,7 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
 
     # Create metadata
     metadata = {
-        'proj_nbr': proj_nbr,
+        'proj_nbr': n_total,
         'grid': grid,
         'fov_h': fov_h,
         'fov_v': fov_v,
@@ -858,6 +935,7 @@ def generate_composite_from_config(cfg_dict, fisheye_img=None):
         'mapping_matrices': combined_maps,
         'pad_pct_v': pad_pct_v,
         'pad_pct_h': pad_pct_h,
+        'proj_list': proj_list,         # per-slot params; used by FOV overlay drawing
     }
 
     return resized_composite, metadata
@@ -892,14 +970,18 @@ def main():
     else:
         pad_pct_v, pad_pct_h = 0.0, 0.0
 
-    # Validate proj_nbr
+    # Validate proj_nbr (uniform projections must be a valid grid count)
     if not is_valid_proj_nbr(proj_nbr):
         print(f"Error: Invalid number of projections ({proj_nbr}).")
         print("The number must be even or have an integer square root.")
         return 1
 
-    # Determine grid layout
-    grid = determine_grid(proj_nbr, grid)
+    # Build the per-slot projection list (supports extra_projections if present in cfg)
+    proj_list = resolve_proj_list(cfg)
+    n_total = len(proj_list)
+
+    # Determine grid layout based on total slot count
+    grid = determine_grid(n_total, grid)
 
     # Cell dimensions (used when applying padding)
     grid_rows, grid_cols = grid
@@ -969,20 +1051,22 @@ def main():
     projections = []
     mapping_matrices = []
     total_latency = 0
-    fov_colors = generate_rainbow_colors(proj_nbr)
+    fov_colors = generate_rainbow_colors(n_total)
 
     # Create a copy of the fisheye for FOV visualization
     fisheye_with_fovs = fisheye_img.copy()
 
-    print(f"Generating {proj_nbr} projections...")
-    for i in range(proj_nbr):
-        # Calculate longitude for this projection
-        longitude = (lon_0 + i * lon_step) % 360
+    print(f"Generating {n_total} projections...")
+    for i, proj_params in enumerate(proj_list):
+        p_lon = proj_params["longitude"]
+        p_lat = proj_params["latitude"]
+        p_fov_h = proj_params["fov_h"]
+        p_fov_v = proj_params["fov_v"]
 
         # Generate projection (at content resolution, padding budget already subtracted)
         projection, latency, mapping = fisheye_to_perspective(
-            fisheye_img, cx, cy, r, longitude, latitude,
-            fov_h, fov_v, target_mp, grid, comp_sz, pad_pct_h, pad_pct_v
+            fisheye_img, cx, cy, r, p_lon, p_lat,
+            p_fov_h, p_fov_v, target_mp, grid, comp_sz, pad_pct_h, pad_pct_v
         )
         if pad_pct_v > 0.0 or pad_pct_h > 0.0:
             map_x, map_y = mapping
@@ -998,15 +1082,13 @@ def main():
         proj_file = os.path.join(out_dir, f"persp-{next_index}-{i}.png")
         cv2.imwrite(proj_file, projection)
 
-        # Store mapping matrices in the list (will save all together later)
-
         # Draw FOV on fisheye image
         fisheye_with_fovs = draw_fov_on_fisheye(
-            fisheye_with_fovs, cx, cy, r, longitude, latitude,
-            fov_h, fov_v, fov_colors[i]
+            fisheye_with_fovs, cx, cy, r, p_lon, p_lat,
+            p_fov_h, p_fov_v, fov_colors[i]
         )
 
-        print(f"  Projection {i + 1}/{proj_nbr} at longitude {longitude:.1f}° - Latency: {latency:.1f}ms")
+        print(f"  Projection {i + 1}/{n_total} at lon={p_lon:.1f}deg lat={p_lat:.1f}deg - Latency: {latency:.1f}ms")
 
     # Create and save composite image
     composite, resized_composite = create_composite_image(projections, grid, comp_sz)
@@ -1026,8 +1108,8 @@ def main():
 
     # Save all mapping matrices in one combined file
     print("Saving combined mapping matrices...")
-    # Create array with shape [proj_nbr, 2, height, width]
-    combined_maps = np.zeros((proj_nbr, 2,
+    # Create array with shape [n_total, 2, height, width]
+    combined_maps = np.zeros((n_total, 2,
                               mapping_matrices[0][0].shape[0],
                               mapping_matrices[0][0].shape[1]), dtype=np.float32)
 
@@ -1042,7 +1124,7 @@ def main():
     with open(log_file, 'a') as f:
         f.write("Performance Information:\n")
         f.write(f"- Total Remapping Latency: {total_latency:.2f} ms\n")
-        f.write(f"- Average Latency per Projection: {total_latency / proj_nbr:.2f} ms\n")
+        f.write(f"- Average Latency per Projection: {total_latency / n_total:.2f} ms\n")
 
         # Output dimensions
         proj_dims = projections[0].shape[:2]
@@ -1054,8 +1136,8 @@ def main():
         f.write("\nMapping Matrices Information:\n")
         f.write(f"- All mapping matrices saved to mappings-{next_index}.npy file\n")
         f.write(
-            f"- Combined array shape: [{proj_nbr}, 2, {mapping_matrices[0][0].shape[0]}, {mapping_matrices[0][0].shape[1]}]\n")
-        f.write(f"- First dimension: Projection index (0-{proj_nbr - 1})\n")
+            f"- Combined array shape: [{n_total}, 2, {mapping_matrices[0][0].shape[0]}, {mapping_matrices[0][0].shape[1]}]\n")
+        f.write(f"- First dimension: Projection index (0-{n_total - 1})\n")
         f.write(f"- Second dimension: Map type (0=map_x, 1=map_y)\n")
 
     print("\nProcessing complete!")

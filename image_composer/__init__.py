@@ -19,6 +19,6 @@ if str(_img_composer_dir) not in sys.path:
     sys.path.insert(0, str(_img_composer_dir))
 
 from presets import get_preset, list_presets, PRESETS
-from multi_persp import generate_composite_from_config
+from multi_persp import generate_composite_from_config, resolve_proj_list
 
-__all__ = ['generate_composite_from_config', 'get_preset', 'list_presets', 'PRESETS']
+__all__ = ['generate_composite_from_config', 'resolve_proj_list', 'get_preset', 'list_presets', 'PRESETS']

@@ -32,7 +32,7 @@ from evaluation.lib.evaluator import DetectionEvaluator
 from evaluation.lib.aggregator import ResultsAggregator
 from evaluation.lib.metrics import match_predictions_to_ground_truth
 from detection_pipeline.pipeline import DetectionPipeline
-from image_composer.multi_persp import draw_fov_on_fisheye
+from image_composer.multi_persp import draw_fov_on_fisheye, resolve_proj_list
 
 # Visual color/thickness constants (BGR).  Drive the fisheye output only.
 _CLR_GT   = (0, 255, 0)      # Green  — detected GT box (thick background)
@@ -582,6 +582,7 @@ class MetricsEvaluatorRunner:
         Overlay gnomonic projection boundary outlines on a fisheye image.
 
         Colors cycle through self.proj_boundary_colors (RGB → converted to BGR).
+        Supports both uniform configs and configs with extra_projections.
         Returns the image unchanged if proj_boundary_colors is empty or
         projection_config is None.
         """
@@ -591,21 +592,18 @@ class MetricsEvaluatorRunner:
         H, W = fisheye_img.shape[:2]
         cx, cy = W / 2.0, H / 2.0
         r = min(W, H) / 2.0
-
-        proj_nbr = projection_config.get("proj_nbr", 4)
-        lon_0    = projection_config.get("lon_0", 0.0)
-        lon_step = projection_config.get("lon_step", 90.0)
-        latitude = projection_config.get("latitude", 0.0)
-        fov_h    = projection_config.get("fov_h", 90.0)
-        fov_v    = projection_config.get("fov_v", 90.0)
         n_colors = len(self.proj_boundary_colors)
 
         img = fisheye_img
-        for i in range(proj_nbr):
-            longitude = lon_0 + i * lon_step
+        for i, proj in enumerate(resolve_proj_list(projection_config)):
             rgb = self.proj_boundary_colors[i % n_colors]
             bgr = (rgb[2], rgb[1], rgb[0])
-            img = draw_fov_on_fisheye(img, cx, cy, r, longitude, latitude, fov_h, fov_v, color=bgr)
+            img = draw_fov_on_fisheye(
+                img, cx, cy, r,
+                proj["longitude"], proj["latitude"],
+                proj["fov_h"], proj["fov_v"],
+                color=bgr
+            )
         return img
 
     @staticmethod

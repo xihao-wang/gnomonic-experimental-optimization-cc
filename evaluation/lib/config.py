@@ -289,7 +289,7 @@ _C.IOU_VALIDATION.NUM_SAMPLES = None
 _C.IOU_VALIDATION.DATASET_NAME = "bomni"
 
 # Detection settings (shared across all datasets)
-_C.IOU_VALIDATION.YOLO_MODEL_PATH = "models/yolo11x.pt"
+_C.IOU_VALIDATION.YOLO_MODEL_PATH = "models/yolov8m.pt"
 _C.IOU_VALIDATION.CONF_THRESHOLD = 0.25
 
 # Output directory for IoU validation visualizations
@@ -315,7 +315,7 @@ _C.METRICS_EVALUATION = CN()
 _C.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE = "evaluation.projection_configs_for_metrics"
 
 # YOLO model to use for all configurations (fixed for fair comparison)
-_C.METRICS_EVALUATION.YOLO_MODEL = "models/yolov8m.pt"
+_C.METRICS_EVALUATION.YOLO_MODEL = "models/yolo12x.pt"
 
 # Datasets to evaluate — options: "bomni", "piropo", "cepdof"
 _C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]
@@ -383,7 +383,7 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
 # Empty list [] = evaluate ALL configs defined in that file.
 # Already-evaluated configs are skipped automatically when OVERWRITE_EXISTING=False,
 # so re-running with [] only processes configs that have no result folder yet.
-_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["TEST#28-h60-v85-g(2,3)-pad0v"]
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
 
 # When False (default), skip configs whose result folder already exists.
 # Set to True to force re-evaluation and overwrite existing results.
@@ -395,21 +395,21 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = False
 
 _C.COMPARATOR = CN()
 
-# Config IDs to compare. Empty list = compare ALL configs found in OUTPUT_DIR.
-# _C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)", "TEST#27-h60-v85-g(2,3)-pad14v"]
-_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)", "TEST#27-h60-v85-g(2,3)-pad14v", "TEST#28-h60-v85-g(2,3)-pad0v"]
+# Config IDs to compare. Empty list = compare ALL configs found automatically.
+# _C.COMPARATOR.CONFIG_IDS = []
+_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
 
 # Datasets to include in the comparison
 _C.COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]
 
-# Root directory where per-config results are stored (must match SINGLE_CONFIG_RUN.OUTPUT_DIR)
-_C.COMPARATOR.OUTPUT_DIR = "evaluation/proj-conf-comparison/configs"
-
-# Directory to write comparison outputs (tables, figures, winner file)
-_C.COMPARATOR.COMPARISON_OUT_DIR = "evaluation/proj-conf-comparison/comparisons"
-
 # Enable figure generation (bar charts, PR overlay plots)
 _C.COMPARATOR.ENABLE_FIGURES = True
+
+# NOTE: result and comparison directories are NOT configured here.
+# They are derived automatically in run_comparator.py from:
+#   METRICS_EVALUATION.OUTPUT_DIR / <model_label> / "configs"     (input)
+#   METRICS_EVALUATION.OUTPUT_DIR / <model_label> / "comparisons" (output)
+# where <model_label> = Path(METRICS_EVALUATION.YOLO_MODEL).stem  (e.g. "yolov8m")
 
 # ============================================================================
 # DEBUG / VERBOSE

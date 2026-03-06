@@ -424,6 +424,46 @@ class ProjectionConfigs:
         "target_mp": "auto",
         "pad_direction": "vertical",
         "pad_pct": 0.14
+    },
+    {
+        # 1 central projection (lat=0°, directly nadir — fisheye centre) with square 90x90 FOV,
+        # placed at grid slot (0,0).  Covers theta=0° to 45° from nadir (inner half of fisheye).
+        # + 5 peripheral projections at lat=65°, 80x70 FOV, uniformly spaced at 72° steps.
+        # Peripheral coverage: 65-35=30° to 65+35=100°→clipped 90° — ~15° overlap with central,
+        # full horizon-to-edge coverage.  Horizontal: 80° FOV on 72° step = 8° seam overlap.
+        # Hypothesis: dedicating one sub-view to the nadir region (highest pedestrian density
+        # directly under camera) improves detection vs uniform-latitude configurations.
+        # NOTE — coordinate convention: latitude=0 = nadir (fisheye centre),
+        #                               latitude=90 = horizon (fisheye edge).
+        "id": "TEST#28-central-plus-5periph-g(2,3)",
+        "name": "1 central (lat0, 90x90) + 5 peripheral (lat65, 80x70) — 2x3 grid",
+        "proj_nbr": 5,
+        "fov_h": 75.0,
+        "fov_v": 80.0,
+        "latitude": 50.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 5,
+        "grid": [2, 3],
+        "comp_sz": [640, 640],
+        "target_mp": "auto",
+        "extra_projections": [
+            {"longitude": 0.0, "latitude": 1.0, "fov_h": 40.0, "fov_v": 40.0, "pos": [0, 0]}
+        ]
+    },
+    {
+        "id": "TEST#29-central-plus-5periph-g(2,3)",
+        "name": "1 central (lat0, 90x90) + 5 peripheral (lat65, 80x70) — 2x3 grid",
+        "proj_nbr": 5,
+        "fov_h": 75.0,
+        "fov_v": 70.0,
+        "latitude": 55.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 5,
+        "grid": [2, 3],
+        "comp_sz": [640, 640],
+        "target_mp": "auto",
+        "extra_projections": [
+            {"longitude": 0.0, "latitude": 1.0, "fov_h": 50.0, "fov_v": 50.0, "pos": [0, 0]}
+        ]
     }
-
     ]

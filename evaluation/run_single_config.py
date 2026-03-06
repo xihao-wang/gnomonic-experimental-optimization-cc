@@ -69,8 +69,9 @@ def main():
         )
         sys.exit(1)
 
-    # Per-config results are stored under OUTPUT_DIR/configs/
-    configs_output_dir = str(Path(me.OUTPUT_DIR) / "configs")
+    # Per-config results are stored under OUTPUT_DIR/<model_label>/configs/
+    model_label = Path(me.YOLO_MODEL).stem
+    configs_output_dir = str(Path(me.OUTPUT_DIR) / model_label / "configs")
 
     # --- Print run summary ---------------------------------------------------
     print("=" * 70)
@@ -86,6 +87,7 @@ def main():
     print(f"Vis samples : BOMNI={vis.MAX_SAMPLES.BOMNI or 'all'}  "
           f"PIROPO={vis.MAX_SAMPLES.PIROPO or 'all'}  "
           f"CEPDOF={vis.MAX_SAMPLES.CEPDOF or 'all'}")
+    print(f"Model label : {model_label}")
     print(f"Output dir  : {configs_output_dir}")
     print("=" * 70)
 

@@ -34,7 +34,7 @@ from evaluation.lib.evaluator import DetectionEvaluator
 from evaluation.lib.aggregator import ResultsAggregator
 from evaluation.lib.metrics import match_predictions_to_ground_truth
 from detection_pipeline.pipeline import DetectionPipeline
-from image_composer.multi_persp import draw_fov_on_fisheye
+from image_composer.multi_persp import draw_fov_on_fisheye, resolve_proj_list
 
 # Known pipeline NMS constants (documented for reproducibility in config.json)
 _NMS_PARAMS = {
@@ -511,6 +511,7 @@ class SingleConfigRunner:
         Overlay gnomonic projection boundary outlines on a fisheye image.
 
         Colors cycle through self.proj_boundary_colors (RGB → converted to BGR).
+        Supports both uniform configs and configs with extra_projections.
         Returns the image unchanged if proj_boundary_colors is empty.
         """
         if not self.proj_boundary_colors:
@@ -519,21 +520,18 @@ class SingleConfigRunner:
         H, W = fisheye_img.shape[:2]
         cx, cy = W / 2.0, H / 2.0
         r = min(W, H) / 2.0
-
-        proj_nbr = self.config.get("proj_nbr", 4)
-        lon_0    = self.config.get("lon_0", 0.0)
-        lon_step = self.config.get("lon_step", 90.0)
-        latitude = self.config.get("latitude", 0.0)
-        fov_h    = self.config.get("fov_h", 90.0)
-        fov_v    = self.config.get("fov_v", 90.0)
         n_colors = len(self.proj_boundary_colors)
 
         img = fisheye_img
-        for i in range(proj_nbr):
-            longitude = lon_0 + i * lon_step
+        for i, proj in enumerate(resolve_proj_list(self.config)):
             rgb = self.proj_boundary_colors[i % n_colors]
             bgr = (rgb[2], rgb[1], rgb[0])
-            img = draw_fov_on_fisheye(img, cx, cy, r, longitude, latitude, fov_h, fov_v, color=bgr)
+            img = draw_fov_on_fisheye(
+                img, cx, cy, r,
+                proj["longitude"], proj["latitude"],
+                proj["fov_h"], proj["fov_v"],
+                color=bgr
+            )
         return img
 
     @staticmethod
