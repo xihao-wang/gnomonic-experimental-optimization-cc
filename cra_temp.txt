@@ -1,30 +1,27 @@
 ## Compte Rendu d'Activités — Optimisation de la détection piétonne en images fisheye
 
-Période couverte : Journée du 6 mars 2026
+Période couverte : 9 mars 2026
 Projet : Identification de la meilleure configuration de projection pour détecter des piétons dans des caméras grand-angle (fisheye)
 
 
 --- Activités réalisées ---
 
-1. Isolation des résultats d'évaluation par modèle YOLO
-   Les résultats sont désormais organisés dans un sous-dossier nommé
-   automatiquement d'après le modèle utilisé (ex. yolov8m/, yolo12x/),
-   évitant tout mélange entre runs de modèles différents. Les deux scripts
-   d'évaluation (run_single_config.py, run_comparator.py) dérivent ce nom
-   automatiquement depuis le chemin du modèle configuré.
-   Statut : Terminé
+1. Évaluation multi-modèles de TEST#26 vs chiang-2021-baseline
+   Exécution de run_single_config.py sur 6 modèles YOLO (yolov8n, yolov8m,
+   yolov9e, yolov10m, yolo11m, yolo12m), 3 datasets (BOMNI, PIROPO, CEPDOF).
+   Résultats isolés par modèle sous OUTPUT_DIR/<model_label>/configs/.
 
-2. Passage au modèle YOLO12x (le plus grand disponible)
-   Le modèle actif passe de YOLOv8m à YOLO12x pour maximiser la qualité
-   de détection dans les évaluations à venir.
-   Statut : Terminé
+2. Comparaison cross-modèle via run_cross_model_comparator.py
+   Génération des tableaux de comparaison par dataset, figures (bar charts,
+   courbes PR), et overall_winner.txt pour TEST#26 vs chiang sur tous les
+   modèles évalués. Aucune ré-exécution du pipeline de détection.
 
-3. Rédaction d'un rapport de comparaison (temp/report_TEST26_vs_chiang.tex)
-   Rapport LaTeX synthétisant les résultats de TEST#26 vs. Chiang-2021 sur
-   trois datasets (CEPDOF, BOMNI, PIROPO) avec deux modèles (YOLOv8m,
-   YOLO12X). Présente les métriques par dataset, un résumé cross-modèle,
-   et l'effet du changement de backbone. Deltas exprimés en points de
-   pourcentage (pp) pour AP/P/R/F1 et en FPS pour la vitesse.
-   Statut : Terminé
+3. Rapport de classement par modèle (per_model_head_to_head.txt)
+   Ajout dans CrossModelComparator d'un fichier classant les configurations
+   du meilleur au moins bon (avec delta) par dataset et globalement pour
+   chaque modèle YOLO, suivi d'une matrice de cohérence WIN/LOSS indiquant
+   sur combien de modèles TEST#26 est systématiquement dominant.
 
-
+4. Gestion administrative des stagiaires
+   Traitement de documents relatifs aux stagiaires en cours, publication
+   d'une nouvelle offre de stage, et examen de candidatures reçues.

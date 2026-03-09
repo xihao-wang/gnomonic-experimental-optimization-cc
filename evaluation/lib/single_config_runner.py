@@ -84,7 +84,11 @@ class SingleConfigRunner:
         proj_boundary_colors: Optional[List[tuple]] = None,
         vis_max_samples: Optional[Dict[str, int]] = None,
         vis_spread_samples: bool = True,
-        yolo_imgsz: int = 640
+        yolo_imgsz: int = 640,
+        model_idx: int = 0,
+        model_total: int = 0,
+        config_idx: int = 0,
+        config_total: int = 0
     ):
         """
         Initialize the runner.
@@ -113,6 +117,9 @@ class SingleConfigRunner:
             vis_spread_samples: When True, spread the N visual saves uniformly
                                 across all evaluated frames (step = total / N).
                                 When False, save the first N consecutive frames.
+            model_idx / model_total: Position of this model in the multi-model run
+                                     (0/0 = single-model context, no model tag shown).
+            config_idx / config_total: Position of this config in the run sequence.
         """
         self.config = config
         self.yolo_model = yolo_model
@@ -131,6 +138,10 @@ class SingleConfigRunner:
         self.vis_max_samples = vis_max_samples or {}
         self.vis_spread_samples = vis_spread_samples
         self.yolo_imgsz = yolo_imgsz
+        self.model_idx = model_idx
+        self.model_total = model_total
+        self.config_idx = config_idx
+        self.config_total = config_total
 
     def run(self) -> bool:
         """
@@ -162,7 +173,8 @@ class SingleConfigRunner:
 
         datasets_meta: Dict[str, Any] = {}
 
-        for dataset_name in self.datasets:
+        num_datasets = len(self.datasets)
+        for d_idx, dataset_name in enumerate(self.datasets):
             print(f"\nDataset: {dataset_name.upper()}")
             print("-" * 50)
 
@@ -185,7 +197,9 @@ class SingleConfigRunner:
             result = self._evaluate_on_dataset(
                 dataset=dataset,
                 dataset_name=dataset_name,
-                indices=indices
+                indices=indices,
+                dataset_idx=d_idx,
+                dataset_total=num_datasets
             )
 
             dataset_out_dir = config_dir / dataset_name
@@ -293,7 +307,9 @@ class SingleConfigRunner:
         self,
         dataset,
         dataset_name: str,
-        indices: List[int]
+        indices: List[int],
+        dataset_idx: int = 0,
+        dataset_total: int = 1
     ) -> Dict[str, Any]:
         """
         Run detection + evaluation on a dataset subset.
@@ -375,7 +391,15 @@ class SingleConfigRunner:
             all_predictions_with_confidence.append(detections)
 
             if (i + 1) % 50 == 0 or i == num_images - 1:
-                print(f"  Processed: {i + 1} / {num_images}")
+                parts = []
+                if self.model_total > 0:
+                    model_name = Path(self.yolo_model).stem
+                    parts.append(f"{model_name} ({self.model_idx}/{self.model_total})")
+                if self.config_total > 0:
+                    parts.append(f"{config_id} ({self.config_idx}/{self.config_total})")
+                parts.append(f"{dataset_name} ({dataset_idx + 1}/{dataset_total})")
+                tag = " | ".join(parts)
+                print(f"  [{tag}]  {i + 1}/{num_images}")
 
         aggregated = aggregator.aggregate(
             per_image_results=per_image_results,

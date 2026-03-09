@@ -26,7 +26,7 @@ from pathlib import Path
 # Add project root to sys.path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from evaluation.lib.config import get_cfg
+from evaluation.lib.config import get_cfg, YOLO_IMGSZ_OPTIONS
 from evaluation.lib.metrics_evaluator_runner import MetricsEvaluatorRunner
 
 
@@ -38,6 +38,7 @@ def main():
     """
     # Load configuration
     cfg = get_cfg()
+    model_path = str(Path(__file__).parent.parent / "models" / cfg.METRICS_EVALUATION.YOLO_MODEL)
 
     # Dataset roots mapping
     dataset_roots = {
@@ -62,7 +63,7 @@ def main():
     # Create metrics evaluator runner
     runner = MetricsEvaluatorRunner(
         projection_config_module=cfg.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE,
-        yolo_model=cfg.METRICS_EVALUATION.YOLO_MODEL,
+        yolo_model=model_path,
         datasets=cfg.METRICS_EVALUATION.DATASETS,
         dataset_roots=dataset_roots,
         iou_thresholds=cfg.METRICS_EVALUATION.IOU_THRESHOLDS,
@@ -80,7 +81,7 @@ def main():
             "cepdof": vis.MAX_SAMPLES.CEPDOF
         },
         vis_spread_samples=vis.SPREAD_SAMPLES,
-        yolo_imgsz=cfg.METRICS_EVALUATION.YOLO_IMGSZ
+        yolo_imgsz=YOLO_IMGSZ_OPTIONS[cfg.METRICS_EVALUATION.YOLO_IMGSZ]
     )
 
     # Run evaluation

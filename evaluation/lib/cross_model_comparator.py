@@ -262,6 +262,193 @@ class CrossModelComparator(ConfigComparator):
             print(f"\n  WARNING: Sampling mismatch detected. See {report_path}\n")
 
     # -------------------------------------------------------------------------
+    # Override: winner determination (adds per-model head-to-head)
+    # -------------------------------------------------------------------------
+
+    def _write_winner(
+        self,
+        resolved_ids: List[str],
+        resolved_datasets: List[str],
+        data: Dict[str, Any],
+        out_dir: Path
+    ):
+        """Call parent global ranking, then write per-model head-to-head file."""
+        super()._write_winner(resolved_ids, resolved_datasets, data, out_dir)
+        self._write_per_model_head_to_head(resolved_ids, resolved_datasets, data, out_dir)
+
+    def _write_per_model_head_to_head(
+        self,
+        resolved_ids: List[str],
+        resolved_datasets: List[str],
+        data: Dict[str, Any],
+        out_dir: Path
+    ):
+        """
+        Write per_model_head_to_head.txt.
+
+        For each YOLO model:
+          - Per dataset: rank all original config IDs best-to-worst by
+            AP@[0.30:0.95], showing value and delta from rank-1.
+          - Overall: rank by mean AP across datasets.
+
+        Bottom section: consistency summary matrix (WIN/LOSS per model per dataset).
+        """
+        # --- collect original config IDs (ordered by first appearance) ---
+        all_orig_ids: List[str] = []
+        seen_orig: set = set()
+        for label in resolved_ids:
+            m = self._LABEL_RE.match(label)
+            if m and m.group(1) not in seen_orig:
+                seen_orig.add(m.group(1))
+                all_orig_ids.append(m.group(1))
+
+        # --- group labels by model ---
+        models_ordered: List[str] = []
+        by_model: Dict[str, Dict[str, str]] = {}   # model -> {orig_id -> label}
+        for label in resolved_ids:
+            m = self._LABEL_RE.match(label)
+            if not m:
+                continue
+            orig_id, model = m.group(1), m.group(2)
+            if model not in by_model:
+                by_model[model] = {}
+                models_ordered.append(model)
+            by_model[model][orig_id] = label
+
+        # --- extract AP values: ap_vals[model][orig_id][dataset] ---
+        ap_vals: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {}
+        for model in models_ordered:
+            ap_vals[model] = {}
+            for orig_id in all_orig_ids:
+                ap_vals[model][orig_id] = {}
+                label = by_model[model].get(orig_id)
+                for ds in resolved_datasets:
+                    ap = None
+                    if label:
+                        d = data.get(label, {}).get(ds)
+                        if d is not None:
+                            ap = d["metrics"]["summary"].get("ap")
+                    ap_vals[model][orig_id][ds] = ap
+
+        # --- helper: rank orig_ids by a score dict, best first ---
+        def _rank(scores: Dict[str, Optional[float]]) -> List[str]:
+            valid = [(oid, v) for oid, v in scores.items() if v is not None]
+            return [oid for oid, _ in sorted(valid, key=lambda x: x[1], reverse=True)]
+
+        report_path = out_dir / "per_model_head_to_head.txt"
+
+        with open(report_path, "w") as f:
+            f.write("PER-MODEL HEAD-TO-HEAD RANKING\n")
+            f.write("=" * 70 + "\n")
+            f.write("Metric shown: AP@[0.30:0.95] (rotated-box IoU, fisheye space)\n")
+            f.write("Configs ranked best-to-worst within each model and dataset.\n\n")
+
+            for model in models_ordered:
+                f.write("=" * 70 + "\n")
+                f.write(f"MODEL: {model}\n")
+                f.write("=" * 70 + "\n")
+
+                # Per-dataset ranking
+                overall_scores: Dict[str, List[float]] = {oid: [] for oid in all_orig_ids}
+                for ds in resolved_datasets:
+                    scores_ds = {
+                        oid: ap_vals[model][oid][ds]
+                        for oid in all_orig_ids
+                        if ap_vals[model][oid][ds] is not None
+                    }
+                    ranked = _rank(scores_ds)
+                    best_val = scores_ds[ranked[0]] if ranked else None
+
+                    f.write(f"\n  Dataset: {ds.upper()}\n")
+                    f.write(f"  {'Rank':<6}{'Config':<38}{'AP':>8}{'Delta':>10}\n")
+                    f.write("  " + "-" * 62 + "\n")
+
+                    for rank, oid in enumerate(ranked, 1):
+                        val = scores_ds[oid]
+                        delta = (val - best_val) if rank > 1 else 0.0
+                        delta_str = f"{delta:+.3f}" if rank > 1 else "—"
+                        f.write(f"  {rank:<6}{oid:<38}{val:>8.3f}{delta_str:>10}\n")
+                        overall_scores[oid].append(val)
+
+                # Overall (mean across datasets) ranking
+                mean_scores = {
+                    oid: float(sum(v) / len(v))
+                    for oid, v in overall_scores.items()
+                    if v
+                }
+                ranked_overall = _rank(mean_scores)
+                best_mean = mean_scores[ranked_overall[0]] if ranked_overall else None
+
+                f.write(f"\n  Overall (mean across {len(resolved_datasets)} datasets):\n")
+                f.write(f"  {'Rank':<6}{'Config':<38}{'Mean AP':>8}{'Delta':>10}\n")
+                f.write("  " + "-" * 62 + "\n")
+                for rank, oid in enumerate(ranked_overall, 1):
+                    val = mean_scores[oid]
+                    delta = (val - best_mean) if rank > 1 else 0.0
+                    delta_str = f"{delta:+.3f}" if rank > 1 else "—"
+                    f.write(f"  {rank:<6}{oid:<38}{val:>8.3f}{delta_str:>10}\n")
+
+                f.write("\n")
+
+            # ---- Consistency summary matrix ----
+            # Determine "expected winner" as whichever orig_id appears most often at rank 1
+            win_count: Dict[str, int] = {oid: 0 for oid in all_orig_ids}
+            winner_matrix: Dict[str, Dict[str, Optional[str]]] = {}
+            for model in models_ordered:
+                winner_matrix[model] = {}
+                for ds in resolved_datasets:
+                    scores_ds = {
+                        oid: ap_vals[model][oid][ds]
+                        for oid in all_orig_ids
+                        if ap_vals[model][oid][ds] is not None
+                    }
+                    ranked = _rank(scores_ds)
+                    w = ranked[0] if ranked else None
+                    winner_matrix[model][ds] = w
+                    if w:
+                        win_count[w] += 1
+
+            expected_winner = max(win_count, key=win_count.__getitem__) if win_count else None
+
+            f.write("=" * 70 + "\n")
+            f.write("CONSISTENCY SUMMARY\n")
+            f.write(f"Expected winner: {expected_winner}\n")
+            f.write("WIN = ranks #1 on that dataset for this model\n")
+            f.write("=" * 70 + "\n")
+
+            col_ds_w = 12
+            header = f"  {'Model':<18}"
+            for ds in resolved_datasets:
+                header += f"  {ds.upper():^{col_ds_w}}"
+            header += f"  {'All datasets?':^14}"
+            f.write(header + "\n")
+            f.write("  " + "-" * (18 + (col_ds_w + 2) * len(resolved_datasets) + 16) + "\n")
+
+            n_consistent = 0
+            for model in models_ordered:
+                row = f"  {model:<18}"
+                model_consistent = True
+                for ds in resolved_datasets:
+                    w = winner_matrix[model].get(ds)
+                    won = (w == expected_winner)
+                    if not won:
+                        model_consistent = False
+                    row += f"  {'WIN' if won else 'LOSS':^{col_ds_w}}"
+                row += f"  {'YES' if model_consistent else 'NO':^14}"
+                f.write(row + "\n")
+                if model_consistent:
+                    n_consistent += 1
+
+            f.write("\n")
+            f.write(
+                f"  {expected_winner} is #1 on ALL datasets "
+                f"in {n_consistent}/{len(models_ordered)} models.\n"
+            )
+            f.write("=" * 70 + "\n")
+
+        print(f"Saved: {report_path}")
+
+    # -------------------------------------------------------------------------
     # Override: comparison config metadata
     # -------------------------------------------------------------------------
 

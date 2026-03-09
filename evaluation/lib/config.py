@@ -25,7 +25,7 @@ from pathlib import Path
 # ============================================================================
 
 # Valid YOLO inference resolutions (multiples of 32 accepted by ultralytics).
-# Set METRICS_EVALUATION.YOLO_IMGSZ to one of these values.
+# Set METRICS_EVALUATION.YOLO_IMGSZ to one of these keys.
 YOLO_IMGSZ_OPTIONS = {
     "320":  320,
     "416":  416,
@@ -326,15 +326,14 @@ _C.METRICS_EVALUATION = CN()
 # Can change to other config files like "evaluation.projection_configs_ablation"
 _C.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE = "evaluation.projection_configs_for_metrics"
 
-# YOLO model to use for all configurations (fixed for fair comparison).
-# NOTE: this also controls WHERE run_comparator.py reads and writes results —
-# it derives the model subfolder as Path(YOLO_MODEL).stem (e.g. "yolo12x").
-# To compare results produced by a different model, simply change this value.
-_C.METRICS_EVALUATION.YOLO_MODEL = "models/yolo12x.pt"
+# YOLO model filename for single-model runs (fixed for fair comparison).
+# Specify the .pt filename only; full path resolved as <project_root>/models/<filename>.
+# Also controls WHERE run_comparator.py reads/writes: subfolder = Path(YOLO_MODEL).stem.
+_C.METRICS_EVALUATION.YOLO_MODEL = "yolov10m.pt"
 
-# YOLO inference resolution. Must be one of YOLO_IMGSZ_OPTIONS (see module-level dict).
+# YOLO inference resolution key — must be one of YOLO_IMGSZ_OPTIONS.
 # Fixed across all configs and models to ensure a fair comparison.
-_C.METRICS_EVALUATION.YOLO_IMGSZ = 640
+_C.METRICS_EVALUATION.YOLO_IMGSZ = "640"
 
 # Datasets to evaluate — options: "bomni", "piropo", "cepdof"
 _C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]
@@ -384,9 +383,9 @@ _C.METRICS_EVALUATION.VIS.PROJ_BOUNDARY_COLORS = [(255, 174, 201), (115, 251, 25
 # Maximum number of visual image pairs (composite + fisheye) saved per dataset.
 # 0 = no limit (save all). Each dataset has its own handle.
 _C.METRICS_EVALUATION.VIS.MAX_SAMPLES = CN()
-_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.BOMNI  = 50
-_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.PIROPO = 50
-_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.CEPDOF = 50
+_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.BOMNI  = 100
+_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.PIROPO = 100
+_C.METRICS_EVALUATION.VIS.MAX_SAMPLES.CEPDOF = 100
 
 # When True, the N visual samples are spread uniformly across the evaluated
 # frames (step = total / N), so the last saved visual is near the last frame.
@@ -406,11 +405,49 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
 # Empty list [] = evaluate ALL configs defined in that file.
 # Already-evaluated configs are skipped automatically when OVERWRITE_EXISTING=False,
 # so re-running with [] only processes configs that have no result folder yet.
-_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["TEST#30-h65-v90-g(2,3)", "chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
 
 # When False (default), skip configs whose result folder already exists.
 # Set to True to force re-evaluation and overwrite existing results.
 _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = True
+
+# ----------------------------------------------------------------------------
+# METRICS_EVALUATION.MULTI_MODEL_RUN: run all configs across several YOLO models
+# ----------------------------------------------------------------------------
+
+_C.METRICS_EVALUATION.MULTI_MODEL_RUN = CN()
+
+# Model filenames to test — specify the .pt filename only.
+# Full path resolved automatically as <project_root>/models/<filename>.
+# _C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
+#     # YOLOv8 (2023) — n/s/m/l/x
+#     "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
+#     # YOLOv9 (2024) — c (compact) / e (extended); no n/s/m/l/x naming
+#     "yolov9c.pt", "yolov9e.pt",
+#     # YOLOv10 (2024) — n/s/m/b/l/x (adds 'b' size)
+#     "yolov10n.pt", "yolov10s.pt", "yolov10m.pt", "yolov10b.pt", "yolov10l.pt", "yolov10x.pt",
+#     # YOLO11 (2024) — n/s/m/l/x
+#     "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt",
+#     # YOLO12 (2025) — n/s/m/l/x
+#     "yolo12n.pt", "yolo12s.pt", "yolo12m.pt", "yolo12l.pt", "yolo12x.pt",
+#     # YOLO26 (Jan 2026) — n/s/m/l/x
+#     "yolo26n.pt", "yolo26s.pt", "yolo26m.pt", "yolo26l.pt", "yolo26x.pt",
+# ]
+_C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
+    "yolov8n.pt",   # v8  nano  — lightweight FPS reference
+    "yolov8m.pt",   # v8  medium — most cited baseline in literature
+    "yolov9e.pt",   # v9  extended — closest equivalent to medium
+    "yolov10m.pt",  # v10 medium — NMS-free
+    "yolo11m.pt",   # v11 medium
+    "yolo12m.pt",   # v12 medium
+    "yolo26m.pt",   # v26 medium — latest (Jan 2026)
+]
+
+# Config IDs to evaluate. Empty list = all configs in projection_configs_for_metrics.py.
+_C.METRICS_EVALUATION.MULTI_MODEL_RUN.CONFIG_IDS = []
+
+# When False, skip configs whose result folder already exists for a given model.
+_C.METRICS_EVALUATION.MULTI_MODEL_RUN.OVERWRITE_EXISTING = False
 
 # ============================================================================
 # COMPARATOR: Compare pre-computed per-config results
@@ -420,7 +457,7 @@ _C.COMPARATOR = CN()
 
 # Config IDs to compare. Empty list = compare ALL configs found automatically.
 # _C.COMPARATOR.CONFIG_IDS = []
-_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
+_C.COMPARATOR.CONFIG_IDS = ["TEST#30-h65-v90-g(2,3)", "chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
 
 # Datasets to include in the comparison
 _C.COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]
@@ -446,7 +483,7 @@ _C.CROSS_MODEL_COMPARATOR.MODELS = []
 
 # Original config IDs to include (without model suffix).
 # Empty list = all configs found across all selected model folders.
-_C.CROSS_MODEL_COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
+_C.CROSS_MODEL_COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#26-h60-v90-g(2,3)"]
 
 # Datasets to include in the comparison.
 _C.CROSS_MODEL_COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]

@@ -465,5 +465,18 @@ class ProjectionConfigs:
         "extra_projections": [
             {"longitude": 0.0, "latitude": 1.0, "fov_h": 50.0, "fov_v": 50.0, "pos": [0, 0]}
         ]
+    },
+    {
+        "id": "TEST#30-h65-v90-g(2,3)",
+        "name": "Experimental test (6 proj, 2x3 grid, 65x90 FOV, lat45)",
+        "proj_nbr": 6,
+        "fov_h": 65.0,
+        "fov_v": 90.0,
+        "latitude": 45.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 6,
+        "grid": [2, 3],
+        "comp_sz": [640, 640],
+        "target_mp": "auto"
     }
     ]

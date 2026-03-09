@@ -1,8 +1,16 @@
-feat: add explicit YOLO inference resolution control in evaluation config
+feat: add multi-model evaluation runner with rich progress display
 
-Added YOLO_IMGSZ_OPTIONS (module-level dict of valid ultralytics resolutions)
-and METRICS_EVALUATION.YOLO_IMGSZ = 640 to the evaluation config.
-DetectionPipeline accepts an imgsz override wired from the evaluation config
-through both runners and entry points. detection_pipeline/config.py untouched.
+Introduces run_multi_model.py to evaluate all projection configs across
+a list of YOLO models in one run. Results are isolated per model under
+OUTPUT_DIR/<model_label>/configs/ (existing architecture reused).
+
+Progress now prints inline context at every 50 frames:
+  [yolov8m (1/7) | chiang-2021-baseline (1/4) | bomni (1/3)]  150/245
+
+YOLO_IMGSZ is now a string key resolved against YOLO_IMGSZ_OPTIONS dict
+at runtime, making the selection explicit and validated (KeyError on invalid key).
+
+MULTI_MODEL_RUN config section added with a curated 7-model list covering
+v8 through v26, plus the exhaustive list kept as a commented reference.
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>
