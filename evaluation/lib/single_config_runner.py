@@ -82,7 +82,8 @@ class SingleConfigRunner:
         overwrite_existing: bool = False,
         vis_iou_threshold: float = 0.50,
         proj_boundary_colors: Optional[List[tuple]] = None,
-        vis_max_samples: Optional[Dict[str, int]] = None
+        vis_max_samples: Optional[Dict[str, int]] = None,
+        vis_spread_samples: bool = True
     ):
         """
         Initialize the runner.
@@ -108,6 +109,9 @@ class SingleConfigRunner:
             vis_max_samples: Per-dataset cap on visual image pairs saved.
                              Keys: "bomni", "piropo", "cepdof". Value 0 = no limit.
                              None = no limit for all datasets.
+            vis_spread_samples: When True, spread the N visual saves uniformly
+                                across all evaluated frames (step = total / N).
+                                When False, save the first N consecutive frames.
         """
         self.config = config
         self.yolo_model = yolo_model
@@ -124,6 +128,7 @@ class SingleConfigRunner:
         self.vis_iou_threshold = vis_iou_threshold
         self.proj_boundary_colors = proj_boundary_colors or []
         self.vis_max_samples = vis_max_samples or {}
+        self.vis_spread_samples = vis_spread_samples
 
     def run(self) -> bool:
         """
@@ -318,7 +323,14 @@ class SingleConfigRunner:
         per_image_results = []
         all_predictions_with_confidence = []
         vis_limit = self.vis_max_samples.get(dataset_name, 0)
-        visuals_saved = 0
+        total_frames = len(indices)
+        if vis_limit == 0:
+            vis_save_set = None  # save all
+        elif self.vis_spread_samples:
+            step = total_frames / vis_limit
+            vis_save_set = set(int(j * step) for j in range(min(vis_limit, total_frames)))
+        else:
+            vis_save_set = set(range(min(vis_limit, total_frames)))
 
         for i, idx in enumerate(indices):
             data = dataset[idx]
@@ -327,7 +339,7 @@ class SingleConfigRunner:
 
             save_visual = (
                 self.enable_visuals
-                and (vis_limit == 0 or visuals_saved < vis_limit)
+                and (vis_save_set is None or i in vis_save_set)
             )
 
             pipeline_result = pipeline.run(
@@ -349,7 +361,6 @@ class SingleConfigRunner:
                     idx=i,
                     dataset_out_dir=self.output_dir / config_id / dataset_name
                 )
-                visuals_saved += 1
             else:
                 detections = pipeline_result
 

@@ -116,7 +116,8 @@ def main():
                 "bomni":  vis.MAX_SAMPLES.BOMNI,
                 "piropo": vis.MAX_SAMPLES.PIROPO,
                 "cepdof": vis.MAX_SAMPLES.CEPDOF
-            }
+            },
+            vis_spread_samples=vis.SPREAD_SAMPLES
         )
         did_run = runner.run()
         if did_run:

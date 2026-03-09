@@ -366,12 +366,16 @@ _C.METRICS_EVALUATION.VIS.IOU_THRESHOLD = 0.50
 _C.METRICS_EVALUATION.VIS.PROJ_BOUNDARY_COLORS = [(255, 174, 201), (115, 251, 253)]
 
 # Maximum number of visual image pairs (composite + fisheye) saved per dataset.
-# Visuals are saved for the first N evaluated images; the rest are skipped.
 # 0 = no limit (save all). Each dataset has its own handle.
 _C.METRICS_EVALUATION.VIS.MAX_SAMPLES = CN()
 _C.METRICS_EVALUATION.VIS.MAX_SAMPLES.BOMNI  = 50
 _C.METRICS_EVALUATION.VIS.MAX_SAMPLES.PIROPO = 50
 _C.METRICS_EVALUATION.VIS.MAX_SAMPLES.CEPDOF = 50
+
+# When True, the N visual samples are spread uniformly across the evaluated
+# frames (step = total / N), so the last saved visual is near the last frame.
+# When False, the first N consecutive evaluated frames are saved.
+_C.METRICS_EVALUATION.VIS.SPREAD_SAMPLES = True
 
 # ----------------------------------------------------------------------------
 # METRICS_EVALUATION.SINGLE_CONFIG_RUN: Incremental per-configuration runner

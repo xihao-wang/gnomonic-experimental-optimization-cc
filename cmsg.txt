@@ -1,19 +1,14 @@
-feat: isolate evaluation results by YOLO model and switch to yolo12x
+feat: add spread sampling for visual outputs
 
-Results are now stored under OUTPUT_DIR/<model_label>/ (e.g. yolov8m/,
-yolo12x/) so that runs with different models never mix. Both
-run_single_config.py and run_comparator.py derive the model label from
-Path(METRICS_EVALUATION.YOLO_MODEL).stem automatically.
-
-COMPARATOR.OUTPUT_DIR and COMPARATOR.COMPARISON_OUT_DIR removed from
-config — directories are always derived from METRICS_EVALUATION, keeping
-the two runners in sync without manual coordination.
-
-Active model switched from yolov8m to yolo12x (largest available).
+Visual image pairs are now sampled uniformly across evaluated frames
+(step = total / N) instead of taking the first N consecutive frames.
+Controlled by VIS.SPREAD_SAMPLES in config.py (default: True).
 
 Modified:
-  evaluation/lib/config.py          (remove COMPARATOR dirs, switch model)
-  evaluation/run_single_config.py   (inject model_label in output path)
-  evaluation/run_comparator.py      (derive dirs from METRICS_EVALUATION)
+  evaluation/lib/config.py               (add VIS.SPREAD_SAMPLES)
+  evaluation/lib/single_config_runner.py (precompute vis_save_set)
+  evaluation/lib/metrics_evaluator_runner.py (same)
+  evaluation/run_single_config.py        (pass vis_spread_samples)
+  evaluation/run_metrics_evaluation.py   (pass vis_spread_samples)
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>
