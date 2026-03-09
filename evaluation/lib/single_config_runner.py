@@ -83,7 +83,8 @@ class SingleConfigRunner:
         vis_iou_threshold: float = 0.50,
         proj_boundary_colors: Optional[List[tuple]] = None,
         vis_max_samples: Optional[Dict[str, int]] = None,
-        vis_spread_samples: bool = True
+        vis_spread_samples: bool = True,
+        yolo_imgsz: int = 640
     ):
         """
         Initialize the runner.
@@ -129,6 +130,7 @@ class SingleConfigRunner:
         self.proj_boundary_colors = proj_boundary_colors or []
         self.vis_max_samples = vis_max_samples or {}
         self.vis_spread_samples = vis_spread_samples
+        self.yolo_imgsz = yolo_imgsz
 
     def run(self) -> bool:
         """
@@ -311,7 +313,8 @@ class SingleConfigRunner:
 
         pipeline = DetectionPipeline(
             model_path=self.yolo_model,
-            conf_threshold=0.25
+            conf_threshold=0.25,
+            imgsz=self.yolo_imgsz
         )
         timer = PipelineTimer() if self.enable_timing else None
         evaluator = DetectionEvaluator(iou_thresholds=self.iou_thresholds)

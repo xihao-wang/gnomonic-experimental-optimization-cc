@@ -21,7 +21,7 @@ class YOLODetector:
     """
 
     def __init__(self, model_name="yolov8n.pt", device=None, confidence_threshold=0.05,
-                 iou_threshold=0.8, max_detections=300):
+                 iou_threshold=0.8, max_detections=300, imgsz=640):
         """
         Initialize YOLO detector.
 
@@ -43,6 +43,7 @@ class YOLODetector:
         self.confidence_threshold = confidence_threshold
         self.iou_threshold = iou_threshold
         self.max_detections = max_detections
+        self.imgsz = imgsz
 
         # Auto-detect device if not specified
         if device is None:
@@ -93,6 +94,7 @@ class YOLODetector:
             conf=self.confidence_threshold,
             iou=self.iou_threshold,
             max_det=self.max_detections,
+            imgsz=self.imgsz,
             verbose=False
         )
 

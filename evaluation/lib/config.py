@@ -24,6 +24,18 @@ from pathlib import Path
 # Module-level constants
 # ============================================================================
 
+# Valid YOLO inference resolutions (multiples of 32 accepted by ultralytics).
+# Set METRICS_EVALUATION.YOLO_IMGSZ to one of these values.
+YOLO_IMGSZ_OPTIONS = {
+    "320":  320,
+    "416":  416,
+    "512":  512,
+    "640":  640,
+    "768":  768,
+    "1024": 1024,
+    "1280": 1280,
+}
+
 # Prediction bbox color presets (BGR format)
 PRED_BBOX_COLOR_PRESETS = {
     "yellow": (0, 255, 255),      # High contrast on brown/dark scenes
@@ -319,6 +331,10 @@ _C.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE = "evaluation.projection_configs_
 # it derives the model subfolder as Path(YOLO_MODEL).stem (e.g. "yolo12x").
 # To compare results produced by a different model, simply change this value.
 _C.METRICS_EVALUATION.YOLO_MODEL = "models/yolo12x.pt"
+
+# YOLO inference resolution. Must be one of YOLO_IMGSZ_OPTIONS (see module-level dict).
+# Fixed across all configs and models to ensure a fair comparison.
+_C.METRICS_EVALUATION.YOLO_IMGSZ = 640
 
 # Datasets to evaluate — options: "bomni", "piropo", "cepdof"
 _C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]

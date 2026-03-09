@@ -117,7 +117,8 @@ def main():
                 "piropo": vis.MAX_SAMPLES.PIROPO,
                 "cepdof": vis.MAX_SAMPLES.CEPDOF
             },
-            vis_spread_samples=vis.SPREAD_SAMPLES
+            vis_spread_samples=vis.SPREAD_SAMPLES,
+            yolo_imgsz=me.YOLO_IMGSZ
         )
         did_run = runner.run()
         if did_run:

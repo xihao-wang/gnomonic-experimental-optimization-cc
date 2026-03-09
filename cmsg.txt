@@ -1,14 +1,8 @@
-feat: add spread sampling for visual outputs
+feat: add explicit YOLO inference resolution control in evaluation config
 
-Visual image pairs are now sampled uniformly across evaluated frames
-(step = total / N) instead of taking the first N consecutive frames.
-Controlled by VIS.SPREAD_SAMPLES in config.py (default: True).
-
-Modified:
-  evaluation/lib/config.py               (add VIS.SPREAD_SAMPLES)
-  evaluation/lib/single_config_runner.py (precompute vis_save_set)
-  evaluation/lib/metrics_evaluator_runner.py (same)
-  evaluation/run_single_config.py        (pass vis_spread_samples)
-  evaluation/run_metrics_evaluation.py   (pass vis_spread_samples)
+Added YOLO_IMGSZ_OPTIONS (module-level dict of valid ultralytics resolutions)
+and METRICS_EVALUATION.YOLO_IMGSZ = 640 to the evaluation config.
+DetectionPipeline accepts an imgsz override wired from the evaluation config
+through both runners and entry points. detection_pipeline/config.py untouched.
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

@@ -38,7 +38,7 @@ class DetectionPipeline:
     Orchestrates the detection pipeline: fisheye -> composite -> YOLO detection.
     """
 
-    def __init__(self, cfg=None, model_path=None, conf_threshold=None):
+    def __init__(self, cfg=None, model_path=None, conf_threshold=None, imgsz=None):
         """
         Initialize detection pipeline.
 
@@ -46,11 +46,13 @@ class DetectionPipeline:
             cfg: YACS config object. If None, uses default config.
             model_path: Optional path to YOLO model (overrides cfg if provided)
             conf_threshold: Optional confidence threshold (overrides cfg if provided)
+            imgsz: Optional YOLO inference resolution (overrides YOLODetector default if provided)
         """
         if cfg is None:
             cfg = get_cfg()
 
         self.cfg = cfg
+        self.imgsz = imgsz  # None → YOLODetector uses its own default (640)
 
         # Override config with direct parameters if provided
         if model_path is not None:
@@ -66,13 +68,16 @@ class DetectionPipeline:
         # Use Stage 1 NMS threshold if enabled, otherwise use a default
         stage1_iou = self.cfg.NMS.STAGE1.IOU_THRESHOLD if self.cfg.NMS.STAGE1.ENABLED else 0.45
 
-        self.detector = YOLODetector(
+        detector_kwargs = dict(
             model_name=self.cfg.YOLO.MODEL,
             device=self.cfg.YOLO.DEVICE,
             confidence_threshold=self.cfg.YOLO.CONFIDENCE_THRESHOLD,
             iou_threshold=stage1_iou,
-            max_detections=self.cfg.YOLO.MAX_DETECTIONS
+            max_detections=self.cfg.YOLO.MAX_DETECTIONS,
         )
+        if self.imgsz is not None:
+            detector_kwargs["imgsz"] = self.imgsz
+        self.detector = YOLODetector(**detector_kwargs)
 
         if self.cfg.VERBOSE:
             print(f"Initialized {self.detector}")

@@ -79,7 +79,8 @@ def main():
             "piropo": vis.MAX_SAMPLES.PIROPO,
             "cepdof": vis.MAX_SAMPLES.CEPDOF
         },
-        vis_spread_samples=vis.SPREAD_SAMPLES
+        vis_spread_samples=vis.SPREAD_SAMPLES,
+        yolo_imgsz=cfg.METRICS_EVALUATION.YOLO_IMGSZ
     )
 
     # Run evaluation

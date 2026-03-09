@@ -68,7 +68,8 @@ class MetricsEvaluatorRunner:
         vis_iou_threshold: float = 0.50,
         proj_boundary_colors: List[tuple] = None,
         vis_max_samples: Dict[str, int] = None,
-        vis_spread_samples: bool = True
+        vis_spread_samples: bool = True,
+        yolo_imgsz: int = 640
     ):
         """
         Initialize metrics evaluator runner.
@@ -112,6 +113,7 @@ class MetricsEvaluatorRunner:
         self.proj_boundary_colors = proj_boundary_colors or []
         self.vis_max_samples = vis_max_samples or {}
         self.vis_spread_samples = vis_spread_samples
+        self.yolo_imgsz = yolo_imgsz
 
         # Load projection configurations
         self.configs = self._load_projection_configs()
@@ -369,7 +371,8 @@ class MetricsEvaluatorRunner:
         # Initialize detection pipeline
         pipeline = DetectionPipeline(
             model_path=self.yolo_model,
-            conf_threshold=0.25
+            conf_threshold=0.25,
+            imgsz=self.yolo_imgsz
         )
 
         # Initialize timer (if enabled)
