@@ -314,7 +314,10 @@ _C.METRICS_EVALUATION = CN()
 # Can change to other config files like "evaluation.projection_configs_ablation"
 _C.METRICS_EVALUATION.PROJECTION_CONFIG_MODULE = "evaluation.projection_configs_for_metrics"
 
-# YOLO model to use for all configurations (fixed for fair comparison)
+# YOLO model to use for all configurations (fixed for fair comparison).
+# NOTE: this also controls WHERE run_comparator.py reads and writes results —
+# it derives the model subfolder as Path(YOLO_MODEL).stem (e.g. "yolo12x").
+# To compare results produced by a different model, simply change this value.
 _C.METRICS_EVALUATION.YOLO_MODEL = "models/yolo12x.pt"
 
 # Datasets to evaluate — options: "bomni", "piropo", "cepdof"
@@ -383,11 +386,11 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
 # Empty list [] = evaluate ALL configs defined in that file.
 # Already-evaluated configs are skipped automatically when OVERWRITE_EXISTING=False,
 # so re-running with [] only processes configs that have no result folder yet.
-_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
 
 # When False (default), skip configs whose result folder already exists.
 # Set to True to force re-evaluation and overwrite existing results.
-_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = False
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = True
 
 # ============================================================================
 # COMPARATOR: Compare pre-computed per-config results
@@ -397,7 +400,7 @@ _C.COMPARATOR = CN()
 
 # Config IDs to compare. Empty list = compare ALL configs found automatically.
 # _C.COMPARATOR.CONFIG_IDS = []
-_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#11-h60-v80-g(2,3)", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
+_C.COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
 
 # Datasets to include in the comparison
 _C.COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]
@@ -410,6 +413,29 @@ _C.COMPARATOR.ENABLE_FIGURES = True
 #   METRICS_EVALUATION.OUTPUT_DIR / <model_label> / "configs"     (input)
 #   METRICS_EVALUATION.OUTPUT_DIR / <model_label> / "comparisons" (output)
 # where <model_label> = Path(METRICS_EVALUATION.YOLO_MODEL).stem  (e.g. "yolov8m")
+
+# ============================================================================
+# CROSS_MODEL_COMPARATOR: Compare configs across all evaluated YOLO models
+# ============================================================================
+
+_C.CROSS_MODEL_COMPARATOR = CN()
+
+# Models to include (folder names under METRICS_EVALUATION.OUTPUT_DIR,
+# e.g. ["yolov8m", "yolo12x"]). Empty list = all model folders found.
+_C.CROSS_MODEL_COMPARATOR.MODELS = []
+
+# Original config IDs to include (without model suffix).
+# Empty list = all configs found across all selected model folders.
+_C.CROSS_MODEL_COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#25-h60-v90-g(2,3)", "TEST#26-h60-v90-g(2,3)"]
+
+# Datasets to include in the comparison.
+_C.CROSS_MODEL_COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]
+
+# Enable figure generation (bar charts, PR overlay plots).
+_C.CROSS_MODEL_COMPARATOR.ENABLE_FIGURES = True
+
+# Results are written to:
+#   METRICS_EVALUATION.OUTPUT_DIR / "cross-model" / comparison_{timestamp}/
 
 # ============================================================================
 # DEBUG / VERBOSE

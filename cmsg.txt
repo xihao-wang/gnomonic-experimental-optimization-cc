@@ -1,21 +1,19 @@
-feat: add flexible per-projection config with extra_projections and TEST#28
+feat: isolate evaluation results by YOLO model and switch to yolo12x
 
-Introduces resolve_proj_list() as a shared helper that builds the ordered
-per-slot projection list from a config dict. Supports two modes:
-- Uniform (existing): all projections share latitude/FOV, spaced by lon_step
-- Mixed (new): extra_projections list with per-slot longitude/latitude/FOV
-  and optional pos:[row,col] for grid placement; remaining slots filled
-  uniformly. Backward-compatible with all existing configs.
+Results are now stored under OUTPUT_DIR/<model_label>/ (e.g. yolov8m/,
+yolo12x/) so that runs with different models never mix. Both
+run_single_config.py and run_comparator.py derive the model label from
+Path(METRICS_EVALUATION.YOLO_MODEL).stem automatically.
 
-TEST#28: 1 nadir projection (lat=0, 90x90 FOV, slot [0,0]) + 5 peripheral
-projections at lat=45, 60x85 FOV — hypothesis: dedicated nadir sub-view
-improves recall for pedestrians directly under the camera.
+COMPARATOR.OUTPUT_DIR and COMPARATOR.COMPARISON_OUT_DIR removed from
+config — directories are always derived from METRICS_EVALUATION, keeping
+the two runners in sync without manual coordination.
+
+Active model switched from yolov8m to yolo12x (largest available).
 
 Modified:
-  image_composer/multi_persp.py        (resolve_proj_list, generate_composite_from_config, main)
-  image_composer/__init__.py           (export resolve_proj_list)
-  evaluation/lib/single_config_runner.py    (_draw_projection_boundaries)
-  evaluation/lib/metrics_evaluator_runner.py (_draw_projection_boundaries)
-  evaluation/projection_configs_for_metrics.py (add TEST#28)
+  evaluation/lib/config.py          (remove COMPARATOR dirs, switch model)
+  evaluation/run_single_config.py   (inject model_label in output path)
+  evaluation/run_comparator.py      (derive dirs from METRICS_EVALUATION)
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

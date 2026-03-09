@@ -1,24 +1,30 @@
 ## Compte Rendu d'Activités — Optimisation de la détection piétonne en images fisheye
 
-Période couverte : Journée du 5 mars 2026
+Période couverte : Journée du 6 mars 2026
 Projet : Identification de la meilleure configuration de projection pour détecter des piétons dans des caméras grand-angle (fisheye)
 
 
 --- Activités réalisées ---
 
-1. Extension du module de composition d'images (image_composer)
-   Deux nouvelles fonctionnalités ont été ajoutées pour élargir l'espace de
-   configurations testables :
-   - Rembourrage noir par cellule (padding) : réduit la déformation des piétons
-     dans les grilles allongées ; rastérisation directe à résolution réduite
-     pour préserver l'efficacité de calcul (TEST#27).
-   - Projections à paramètres libres (extra_projections) : permet de définir
-     des vues à latitude, champ de vision et position dans la grille
-     personnalisés, en combinaison avec les vues uniformes — par exemple une
-     vue centrale au nadir et des vues périphériques (TEST#28, TEST#29).
-     Rétrocompatible avec toutes les configurations existantes.
+1. Isolation des résultats d'évaluation par modèle YOLO
+   Les résultats sont désormais organisés dans un sous-dossier nommé
+   automatiquement d'après le modèle utilisé (ex. yolov8m/, yolo12x/),
+   évitant tout mélange entre runs de modèles différents. Les deux scripts
+   d'évaluation (run_single_config.py, run_comparator.py) dérivent ce nom
+   automatiquement depuis le chemin du modèle configuré.
    Statut : Terminé
 
-2. Suivi et réunion avec le stagiaire Xihao Wang
+2. Passage au modèle YOLO12x (le plus grand disponible)
+   Le modèle actif passe de YOLOv8m à YOLO12x pour maximiser la qualité
+   de détection dans les évaluations à venir.
    Statut : Terminé
+
+3. Rédaction d'un rapport de comparaison (temp/report_TEST26_vs_chiang.tex)
+   Rapport LaTeX synthétisant les résultats de TEST#26 vs. Chiang-2021 sur
+   trois datasets (CEPDOF, BOMNI, PIROPO) avec deux modèles (YOLOv8m,
+   YOLO12X). Présente les métriques par dataset, un résumé cross-modèle,
+   et l'effet du changement de backbone. Deltas exprimés en points de
+   pourcentage (pp) pour AP/P/R/F1 et en FPS pour la vitesse.
+   Statut : Terminé
+
 
