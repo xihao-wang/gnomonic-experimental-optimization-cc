@@ -24,29 +24,37 @@ import matplotlib.pyplot as plt
 # Statistical confidence flag threshold (frames)
 _LOW_CONFIDENCE_THRESHOLD = 500  # datasets with fewer frames get a low-confidence note
 
-# IoU thresholds used by each AP style
+# Primary metric thresholds: AP@[0.50:0.75].
+# Computed from metrics_per_iou at read time — pre-existing results evaluated
+# under a wider range remain valid without re-running the detection pipeline.
+# DO NOT MODIFY: all output .txt labels (comparison tables, overall_winner.txt,
+# per_model_head_to_head.txt) hardcode "AP@[0.50:0.75]" as a string. Changing
+# this list without updating every label will produce silently misleading output.
+_PRIMARY_THRESHOLDS = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75]
+
+# COCO-style thresholds for the AP@[0.50:0.95] reference metric.
 _COCO_THRESHOLDS = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
 
 # Human-readable notes appended to every comparison table and winner file
 _METRIC_NOTES = """\
 METRIC NOTES
 ------------
-AP@0.50          Pascal VOC style. A detection is correct if rotated IoU with
-                 the GT box is >= 0.50. Single threshold, widely used baseline.
+AP@[0.50:0.75]   Primary metric (this project). Mean AP across IoU thresholds
+                 0.50, 0.55, 0.60, 0.65, 0.70, 0.75 (6 thresholds, step 0.05).
+                 Rationale: predictions are radially aligned by design; GT
+                 annotations on CEPDOF are free-orientation. Thresholds above
+                 0.75 penalise this systematic convention mismatch rather than
+                 genuine localisation error. Floor kept at 0.50 (Pascal VOC
+                 standard) — lowering it would inflate AP with near-misses.
 
-AP@[0.50:0.95]   COCO style. Mean AP across IoU thresholds 0.50, 0.55, ..., 0.95
-                 (10 thresholds, step 0.05). Industry standard for detection
-                 benchmarks. Stricter than Pascal VOC.
+AP@[0.50:0.95]   COCO style. Mean AP across 10 thresholds (0.50 to 0.95,
+                 step 0.05). Shown as a reference for comparison with
+                 standard benchmarks. Includes thresholds affected by the
+                 radial-alignment mismatch — interpret with caution.
 
-AP@[0.30:0.95]   Custom (this project). Same as COCO but extended down to 0.30
-                 (14 thresholds). Rationale: all IoU values here are computed on
-                 ROTATED bounding boxes in fisheye space (after backprojection).
-                 Rotated-box IoU is geometrically stricter than axis-aligned IoU
-                 at the same threshold value — even a small angle or center error
-                 can drop overlap significantly. Starting from 0.30 accounts for
-                 this. Especially relevant for CEPDOF, where ground-truth boxes
-                 are NOT radially aligned (free body orientation), making the
-                 backprojected box shape less predictable than in BOMNI/PIROPO.
+AP@0.50          Pascal VOC style. Single threshold, widely used baseline.
+
+AP@0.75          Stricter single threshold, included for reference.
 
 All IoU values are computed between rotated bounding boxes in fisheye image
 space (i.e. after backprojection + Soft-NMS). These IoU thresholds are
@@ -162,6 +170,14 @@ class ConfigComparator:
 
         # Overall winner determination
         self._write_winner(
+            resolved_ids=resolved_ids,
+            resolved_datasets=resolved_datasets,
+            data=data,
+            out_dir=out_dir
+        )
+
+        # JSON summary for downstream use (e.g. LaTeX paper generation)
+        self._save_summary_json(
             resolved_ids=resolved_ids,
             resolved_datasets=resolved_datasets,
             data=data,
@@ -356,22 +372,19 @@ class ConfigComparator:
     # -------------------------------------------------------------------------
 
     @staticmethod
-    def _compute_coco_ap(metrics_data: Dict) -> Optional[float]:
-        """
-        Compute COCO-style AP@[0.50:0.95] from a metrics.json metrics block.
-
-        Averages AP over the 10 COCO thresholds (0.50 to 0.95, step 0.05).
-        All these thresholds are a subset of our stored range (0.30:0.95),
-        so no re-running is needed — the values are read directly from
-        metrics_per_iou (keys are floats after rehydration).
-        """
+    def _compute_ap_range(metrics_data: Dict, thresholds: List[float]) -> Optional[float]:
+        """Mean AP over a specific list of IoU thresholds (read from metrics_per_iou)."""
         metrics_per_iou = metrics_data.get("metrics_per_iou", {})
         ap_values = [
             metrics_per_iou[t]["ap"]
-            for t in _COCO_THRESHOLDS
+            for t in thresholds
             if t in metrics_per_iou and "ap" in metrics_per_iou[t]
         ]
         return float(np.mean(ap_values)) if ap_values else None
+
+    def _compute_coco_ap(self, metrics_data: Dict) -> Optional[float]:
+        """COCO-style AP@[0.50:0.95] — reference metric, shown alongside primary."""
+        return self._compute_ap_range(metrics_data, _COCO_THRESHOLDS)
 
     # -------------------------------------------------------------------------
     # Comparison table
@@ -386,7 +399,7 @@ class ConfigComparator:
         """
         Write a side-by-side comparison table for one dataset.
 
-        Rows: AP@[0.30:0.95], AP@0.50, AP@0.75, Precision@0.5,
+        Rows: AP@[0.50:0.75], AP@0.50, AP@0.75, Precision@0.5,
               Recall@0.5, F1@0.5, FPS (1 / total_end_to_end_mean).
         Note: single class (person) — AP is reported, not mAP.
         """
@@ -409,9 +422,9 @@ class ConfigComparator:
 
             # Metric rows
             rows = [
-                ("AP@[0.30:0.95] *", lambda d: d["metrics"]["summary"]["ap"]),
+                ("AP@[0.50:0.75] *",  lambda d: self._compute_ap_range(d["metrics"], _PRIMARY_THRESHOLDS)),
                 ("AP@[0.50:0.95] **", lambda d: self._compute_coco_ap(d["metrics"])),
-                ("AP@0.50 ***",      lambda d: d["metrics"]["summary"]["ap50"]),
+                ("AP@0.50",           lambda d: d["metrics"]["summary"]["ap50"]),
                 ("AP@0.75",          lambda d: d["metrics"]["summary"]["ap75"]),
                 ("Precision@0.5",    lambda d: d["metrics"]["summary"]["precision@0.5"]),
                 ("Recall@0.5",       lambda d: d["metrics"]["summary"]["recall@0.5"]),
@@ -452,9 +465,9 @@ class ConfigComparator:
             f.write("BEST PER METRIC (this dataset):\n")
 
             metric_bests = [
-                ("AP@[0.30:0.95] *",  lambda d: d["metrics"]["summary"]["ap"]),
+                ("AP@[0.50:0.75] *",  lambda d: self._compute_ap_range(d["metrics"], _PRIMARY_THRESHOLDS)),
                 ("AP@[0.50:0.95] **", lambda d: self._compute_coco_ap(d["metrics"])),
-                ("AP@0.50 ***",       lambda d: d["metrics"]["summary"]["ap50"]),
+                ("AP@0.50",           lambda d: d["metrics"]["summary"]["ap50"]),
                 ("AP@0.75",           lambda d: d["metrics"]["summary"]["ap75"]),
                 ("Precision@0.5",     lambda d: d["metrics"]["summary"]["precision@0.5"]),
                 ("Recall@0.5",        lambda d: d["metrics"]["summary"]["recall@0.5"]),
@@ -509,11 +522,11 @@ class ConfigComparator:
         dataset_data: Dict[str, Any],
         figures_dir: Path
     ):
-        """Bar chart: AP@[0.30:0.95] per configuration for one dataset."""
+        """Bar chart: AP@[0.50:0.75] per configuration for one dataset."""
         config_ids = list(dataset_data.keys())
         config_names = [dataset_data[cid]["config_name"] for cid in config_ids]
         ap_values = [
-            dataset_data[cid]["metrics"]["summary"].get("ap", 0.0)
+            self._compute_ap_range(dataset_data[cid]["metrics"], _PRIMARY_THRESHOLDS) or 0.0
             for cid in config_ids
         ]
 
@@ -521,7 +534,7 @@ class ConfigComparator:
         bars = ax.bar(range(len(config_ids)), ap_values, color="steelblue", width=0.6)
         ax.set_xticks(range(len(config_ids)))
         ax.set_xticklabels(config_names, rotation=20, ha="right", fontsize=9)
-        ax.set_ylabel("AP@[0.30:0.95]", fontsize=11)
+        ax.set_ylabel("AP@[0.50:0.75]", fontsize=11)
         ax.set_title(
             f"AP Comparison — {dataset_name.upper()} Dataset", fontsize=13
         )
@@ -620,20 +633,19 @@ class ConfigComparator:
     ):
         """
         Determine and write two independent winners:
-          - Robustness winner: highest mean AP@[0.30:0.95] across datasets
+          - Robustness winner: highest mean AP@[0.50:0.75] across datasets
           - Speed winner:      highest mean FPS across datasets
 
         Aggregation: equal weight per dataset (each environment counts equally).
         No tie-breaking between the two winners — they are reported separately.
         """
-        # Collect per-dataset AP (3 styles) and FPS per config
-        per_dataset_ap_custom: Dict[str, Dict[str, float]] = {}  # AP@[0.30:0.95]
-        per_dataset_ap_coco:   Dict[str, Dict[str, float]] = {}  # AP@[0.50:0.95]
-        per_dataset_ap50:      Dict[str, Dict[str, float]] = {}  # AP@0.50
-        per_dataset_fps:       Dict[str, Dict[str, float]] = {}
+        per_dataset_ap:      Dict[str, Dict[str, float]] = {}  # AP@[0.50:0.75]
+        per_dataset_ap_coco: Dict[str, Dict[str, float]] = {}  # AP@[0.50:0.95]
+        per_dataset_ap50:    Dict[str, Dict[str, float]] = {}  # AP@0.50
+        per_dataset_fps:     Dict[str, Dict[str, float]] = {}
 
         for dataset_name in resolved_datasets:
-            per_dataset_ap_custom[dataset_name] = {}
+            per_dataset_ap[dataset_name] = {}
             per_dataset_ap_coco[dataset_name] = {}
             per_dataset_ap50[dataset_name] = {}
             per_dataset_fps[dataset_name] = {}
@@ -642,13 +654,13 @@ class ConfigComparator:
                 if d is None:
                     continue
 
-                metrics = d["metrics"]
-                ap_custom = metrics["summary"].get("ap", None)
-                ap_coco   = self._compute_coco_ap(metrics)
-                ap50      = metrics["summary"].get("ap50", None)
+                metrics  = d["metrics"]
+                ap       = self._compute_ap_range(metrics, _PRIMARY_THRESHOLDS)
+                ap_coco  = self._compute_coco_ap(metrics)
+                ap50     = metrics["summary"].get("ap50", None)
 
-                if ap_custom is not None:
-                    per_dataset_ap_custom[dataset_name][cid] = ap_custom
+                if ap is not None:
+                    per_dataset_ap[dataset_name][cid] = ap
                 if ap_coco is not None:
                     per_dataset_ap_coco[dataset_name][cid] = ap_coco
                 if ap50 is not None:
@@ -678,27 +690,27 @@ class ConfigComparator:
                     result[cid] = float(np.mean(vals))
             return result
 
-        overall_ap_custom = _overall_mean(per_dataset_ap_custom)
-        overall_ap_coco   = _overall_mean(per_dataset_ap_coco)
-        overall_ap50      = _overall_mean(per_dataset_ap50)
-        overall_fps       = _overall_mean(per_dataset_fps)
+        overall_ap      = _overall_mean(per_dataset_ap)
+        overall_ap_coco = _overall_mean(per_dataset_ap_coco)
+        overall_ap50    = _overall_mean(per_dataset_ap50)
+        overall_fps     = _overall_mean(per_dataset_fps)
 
-        if not overall_ap_custom:
+        if not overall_ap:
             print("WARNING: Could not determine winner — no AP data available.")
             return
 
         def _ranking(scores):
             return sorted(scores.keys(), key=scores.__getitem__, reverse=True)
 
-        ranking_custom = _ranking(overall_ap_custom)
-        ranking_coco   = _ranking(overall_ap_coco)
-        ranking_ap50   = _ranking(overall_ap50)
-        ranking_fps    = _ranking(overall_fps) if overall_fps else []
+        ranking_ap      = _ranking(overall_ap)
+        ranking_ap_coco = _ranking(overall_ap_coco)
+        ranking_ap50    = _ranking(overall_ap50)
+        ranking_fps     = _ranking(overall_fps) if overall_fps else []
 
-        winner_custom = ranking_custom[0]
-        winner_coco   = ranking_coco[0] if ranking_coco else None
-        winner_ap50   = ranking_ap50[0] if ranking_ap50 else None
-        winner_fps    = ranking_fps[0]  if ranking_fps  else None
+        winner_ap      = ranking_ap[0]
+        winner_ap_coco = ranking_ap_coco[0] if ranking_ap_coco else None
+        winner_ap50    = ranking_ap50[0]    if ranking_ap50    else None
+        winner_fps     = ranking_fps[0]     if ranking_fps     else None
 
         # Low-confidence dataset flags
         low_conf_datasets = []
@@ -742,17 +754,17 @@ class ConfigComparator:
             )
 
             _write_robustness_section(
-                f, "Custom — AP@[0.30:0.95]  *",
-                per_dataset_ap_custom, overall_ap_custom, ranking_custom, winner_custom
+                f, "AP@[0.50:0.75]  *",
+                per_dataset_ap, overall_ap, ranking_ap, winner_ap
             )
-            if winner_coco:
+            if winner_ap_coco:
                 _write_robustness_section(
-                    f, "COCO   — AP@[0.50:0.95]  **",
-                    per_dataset_ap_coco, overall_ap_coco, ranking_coco, winner_coco
+                    f, "COCO — AP@[0.50:0.95]  **",
+                    per_dataset_ap_coco, overall_ap_coco, ranking_ap_coco, winner_ap_coco
                 )
             if winner_ap50:
                 _write_robustness_section(
-                    f, "Pascal VOC — AP@0.50     ***",
+                    f, "Pascal VOC — AP@0.50",
                     per_dataset_ap50, overall_ap50, ranking_ap50, winner_ap50
                 )
 
@@ -795,24 +807,102 @@ class ConfigComparator:
 
             f.write("\n" + "=" * 60 + "\n")
             f.write(_METRIC_NOTES)
-            f.write(
-                "  * Custom (this project)  "
-                "** COCO style  "
-                "*** Pascal VOC style\n"
-            )
+            f.write("  * Primary metric (this project)  ** COCO style\n")
 
         print(f"Saved: {winner_path}")
-        print(f"\nROBUSTNESS WINNER (Custom AP@[0.30:0.95]) : {winner_custom}"
-              f"  ({overall_ap_custom[winner_custom]:.3f})")
-        if winner_coco:
-            print(f"ROBUSTNESS WINNER (COCO   AP@[0.50:0.95]) : {winner_coco}"
-                  f"  ({overall_ap_coco[winner_coco]:.3f})")
+        print(f"\nROBUSTNESS WINNER (AP@[0.50:0.75]) : {winner_ap}"
+              f"  ({overall_ap[winner_ap]:.3f})")
+        if winner_ap_coco:
+            print(f"ROBUSTNESS WINNER (AP@[0.50:0.95]) : {winner_ap_coco}"
+                  f"  ({overall_ap_coco[winner_ap_coco]:.3f})")
         if winner_ap50:
-            print(f"ROBUSTNESS WINNER (PascalVOC AP@0.50)     : {winner_ap50}"
+            print(f"ROBUSTNESS WINNER (AP@0.50)         : {winner_ap50}"
                   f"  ({overall_ap50[winner_ap50]:.3f})")
         if winner_fps:
-            print(f"SPEED WINNER                               : {winner_fps}"
+            print(f"SPEED WINNER                        : {winner_fps}"
                   f"  ({overall_fps[winner_fps]:.2f} FPS)")
+
+    # -------------------------------------------------------------------------
+    # JSON summary (for downstream paper generation)
+    # -------------------------------------------------------------------------
+
+    def _save_summary_json(
+        self,
+        resolved_ids: List[str],
+        resolved_datasets: List[str],
+        data: Dict[str, Dict[str, Any]],
+        out_dir: Path
+    ):
+        """
+        Write summary.json — a self-contained structured file with all metrics
+        for every config × dataset pair, plus overall rankings.
+
+        Intended for downstream use (e.g. a Claude Code agent generating a
+        LaTeX paper). All metric values are floats rounded to 4 decimal places;
+        missing values are null.
+        """
+        def _safe(val):
+            return round(float(val), 4) if val is not None else None
+
+        results = {}
+        for cid in resolved_ids:
+            results[cid] = {}
+            for ds in resolved_datasets:
+                d = data.get(cid, {}).get(ds)
+                if d is None:
+                    continue
+                metrics = d["metrics"]
+                timing  = d.get("timing")
+                mean_t  = timing.get("total_end_to_end", {}).get("mean") if timing else None
+                results[cid][ds] = {
+                    "config_name":    d.get("config_name", cid),
+                    "num_images":     metrics.get("num_images"),
+                    "ap_50_75":       _safe(self._compute_ap_range(metrics, _PRIMARY_THRESHOLDS)),
+                    "ap_50_95":       _safe(self._compute_coco_ap(metrics)),
+                    "ap50":           _safe(metrics["summary"].get("ap50")),
+                    "ap75":           _safe(metrics["summary"].get("ap75")),
+                    "precision_50":   _safe(metrics["summary"].get("precision@0.5")),
+                    "recall_50":      _safe(metrics["summary"].get("recall@0.5")),
+                    "f1_50":          _safe(metrics["summary"].get("f1@0.5")),
+                    "fps":            _safe(1.0 / mean_t if mean_t and mean_t > 0 else None),
+                }
+
+        # Overall rankings by mean across datasets
+        def _mean_metric(key):
+            ranking = {}
+            for cid in resolved_ids:
+                vals = [
+                    results[cid][ds][key]
+                    for ds in resolved_datasets
+                    if ds in results.get(cid, {}) and results[cid][ds].get(key) is not None
+                ]
+                if vals:
+                    ranking[cid] = round(float(sum(vals) / len(vals)), 4)
+            return [
+                {"rank": i + 1, "config": cid, "mean": v}
+                for i, (cid, v) in enumerate(
+                    sorted(ranking.items(), key=lambda x: x[1], reverse=True)
+                )
+            ]
+
+        summary = {
+            "date":             datetime.now().isoformat(timespec="seconds"),
+            "primary_metric":   "ap_50_75  (AP@[0.50:0.75], rotated-box IoU, fisheye space)",
+            "configs_compared": resolved_ids,
+            "datasets":         resolved_datasets,
+            "results":          results,
+            "overall_rankings": {
+                "ap_50_75": _mean_metric("ap_50_75"),
+                "ap_50_95": _mean_metric("ap_50_95"),
+                "ap50":     _mean_metric("ap50"),
+                "fps":      _mean_metric("fps"),
+            },
+        }
+
+        path = out_dir / "summary.json"
+        with open(path, "w") as f:
+            json.dump(summary, f, indent=2)
+        print(f"Saved: {path}")
 
     # -------------------------------------------------------------------------
     # Metadata

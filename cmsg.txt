@@ -1,11 +1,24 @@
-feat: add cross-model comparator with per-model head-to-head ranking
+feat: switch primary metric to AP@[0.50:0.75], add JSON summary and fix cross-model table layout
 
-CrossModelComparator now produces per_model_head_to_head.txt alongside
-the existing overall_winner.txt. For each YOLO model and each dataset,
-all projection configs are ranked best-to-worst across all metrics
-(AP@[0.30:0.95], AP@[0.50:0.95], AP@0.50, AP@0.75, Precision@0.50,
-Recall@0.50, F1@0.50, FPS), with delta from rank-1 shown per entry.
-A consistency matrix at the bottom reports WIN/LOSS per model per dataset
-and the total count of models where the leading config wins consistently.
+Primary evaluation metric changed from AP@[0.30:0.95] to AP@[0.50:0.75].
+Rationale: thresholds above 0.75 penalise the radial-alignment convention
+mismatch on CEPDOF (free-orientation GT vs radially-aligned predictions)
+rather than genuine localisation error. AP@[0.50:0.95] is kept as a COCO
+reference column. All metrics are now recomputed from metrics_per_iou at
+read time, so pre-existing results remain valid without re-evaluation.
+
+_PRIMARY_THRESHOLDS and _COCO_THRESHOLDS defined as constants in
+comparator.py with a DO NOT MODIFY note: output labels hardcode the
+threshold strings, so changing the list silently produces wrong labels.
+
+Cross-model comparison tables now use a per-model layout (configs as
+columns, one block per YOLO model) instead of a single 24-column table
+with truncated headers. Column widths are computed dynamically from the
+actual config ID lengths.
+
+summary.json added to every comparison output folder. Contains all
+metrics (ap_50_75, ap_50_95, ap50, ap75, precision, recall, f1, fps)
+for every config x dataset pair, plus overall rankings — structured for
+downstream use by a paper-writing agent.
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

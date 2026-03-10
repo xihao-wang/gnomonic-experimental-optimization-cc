@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from evaluation.lib.comparator import ConfigComparator
+from evaluation.lib.comparator import ConfigComparator, _PRIMARY_THRESHOLDS, _COCO_THRESHOLDS
 
 
 class CrossModelComparator(ConfigComparator):
@@ -262,6 +262,126 @@ class CrossModelComparator(ConfigComparator):
             print(f"\n  WARNING: Sampling mismatch detected. See {report_path}\n")
 
     # -------------------------------------------------------------------------
+    # Override: comparison table (per-model layout — configs as columns)
+    # -------------------------------------------------------------------------
+
+    def _write_comparison_table(
+        self,
+        dataset_name: str,
+        dataset_data: Dict[str, Any],
+        out_dir: Path
+    ):
+        """
+        Write one comparison table per YOLO model, each with original config
+        IDs as columns. Avoids the unreadable 24-column layout that results
+        from treating every (config, model) pair as an independent column.
+        """
+        from evaluation.lib.comparator import _PRIMARY_THRESHOLDS, _METRIC_NOTES
+
+        # Group labels by model, preserve original config ID order
+        models_ordered: List[str] = []
+        by_model: Dict[str, Dict[str, str]] = {}
+        all_orig_ids: List[str] = []
+        seen_orig: set = set()
+
+        for label in dataset_data:
+            m = self._LABEL_RE.match(label)
+            if not m:
+                continue
+            orig_id, model = m.group(1), m.group(2)
+            if model not in by_model:
+                by_model[model] = {}
+                models_ordered.append(model)
+            by_model[model][orig_id] = label
+            if orig_id not in seen_orig:
+                seen_orig.add(orig_id)
+                all_orig_ids.append(orig_id)
+
+        col_w = max((len(oid) for oid in all_orig_ids), default=10) + 2
+        metric_w = 22
+
+        metric_rows = [
+            ("AP@[0.50:0.75] *",  lambda d: self._compute_ap_range(d["metrics"], _PRIMARY_THRESHOLDS)),
+            ("AP@[0.50:0.95] **", lambda d: self._compute_coco_ap(d["metrics"])),
+            ("AP@0.50",           lambda d: d["metrics"]["summary"].get("ap50")),
+            ("AP@0.75",           lambda d: d["metrics"]["summary"].get("ap75")),
+            ("Precision@0.5",     lambda d: d["metrics"]["summary"].get("precision@0.5")),
+            ("Recall@0.5",        lambda d: d["metrics"]["summary"].get("recall@0.5")),
+            ("F1@0.5",            lambda d: d["metrics"]["summary"].get("f1@0.5")),
+        ]
+
+        table_path = out_dir / f"{dataset_name}_comparison_table.txt"
+        with open(table_path, "w") as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"Configuration Comparison: {dataset_name.upper()} Dataset\n")
+            f.write("Grouped by YOLO model — configs as columns.\n")
+            f.write("=" * 80 + "\n")
+
+            for model in models_ordered:
+                orig_ids = [oid for oid in all_orig_ids if oid in by_model[model]]
+                if not orig_ids:
+                    continue
+
+                f.write(f"\n--- Model: {model} ---\n")
+                header = f"{'Metric':<{metric_w}}"
+                for oid in orig_ids:
+                    header += f"| {oid:^{col_w}} "
+                f.write(header + "\n")
+                f.write("-" * metric_w + ("|" + "-" * (col_w + 2)) * len(orig_ids) + "\n")
+
+                for metric_name, getter in metric_rows:
+                    row = f"{metric_name:<{metric_w}}"
+                    for oid in orig_ids:
+                        label = by_model[model][oid]
+                        d = dataset_data[label]
+                        try:
+                            val = getter(d)
+                            row += f"| {val:^{col_w}.3f} " if val is not None else f"| {'N/A':^{col_w}} "
+                        except Exception:
+                            row += f"| {'N/A':^{col_w}} "
+                    f.write(row + "\n")
+
+                # FPS
+                has_timing = any(
+                    dataset_data[by_model[model][oid]].get("timing") is not None
+                    for oid in orig_ids
+                )
+                if has_timing:
+                    row = f"{'FPS':<{metric_w}}"
+                    for oid in orig_ids:
+                        timing = dataset_data[by_model[model][oid]].get("timing")
+                        if timing:
+                            mean_t = timing.get("total_end_to_end", {}).get("mean")
+                            fps = 1.0 / mean_t if mean_t and mean_t > 0 else float("nan")
+                            row += f"| {fps:^{col_w}.2f} "
+                        else:
+                            row += f"| {'N/A':^{col_w}} "
+                    f.write(row + "\n")
+
+                # Best per metric for this model
+                f.write(f"\n  Best per metric (model: {model}):\n")
+                for metric_name, getter in metric_rows:
+                    scores = {}
+                    for oid in orig_ids:
+                        label = by_model[model][oid]
+                        try:
+                            val = getter(dataset_data[label])
+                            if val is not None:
+                                scores[oid] = val
+                        except Exception:
+                            pass
+                    if scores:
+                        best = max(scores, key=scores.__getitem__)
+                        f.write(f"  {metric_name:<{metric_w}}: {best}  ({scores[best]:.3f})\n")
+                f.write("\n")
+
+            f.write("=" * 80 + "\n")
+            f.write(_METRIC_NOTES)
+            f.write("  * Primary metric (this project)  ** COCO style\n")
+
+        print(f"Saved: {table_path}")
+
+    # -------------------------------------------------------------------------
     # Override: winner determination (adds per-model head-to-head)
     # -------------------------------------------------------------------------
 
@@ -298,8 +418,8 @@ class CrossModelComparator(ConfigComparator):
         # Metrics to rank: (label, getter(d) -> float|None)
         # d is data[label][dataset_name]
         METRICS = [
-            ("AP@[0.30:0.95]",  lambda d: d["metrics"]["summary"].get("ap")),
-            ("AP@[0.50:0.95]",  lambda d: self._compute_coco_ap(d["metrics"])),
+            ("AP@[0.50:0.75]",  lambda d: self._compute_ap_range(d["metrics"], _PRIMARY_THRESHOLDS)),
+            ("AP@[0.50:0.95]",  lambda d: self._compute_ap_range(d["metrics"], _COCO_THRESHOLDS)),
             ("AP@0.50",         lambda d: d["metrics"]["summary"].get("ap50")),
             ("AP@0.75",         lambda d: d["metrics"]["summary"].get("ap75")),
             ("Precision@0.50",  lambda d: d["metrics"]["summary"].get("precision@0.5")),
@@ -406,7 +526,7 @@ class CrossModelComparator(ConfigComparator):
             expected_winner = max(win_count, key=win_count.__getitem__) if win_count else None
 
             f.write("=" * 70 + "\n")
-            f.write(f"CONSISTENCY SUMMARY  —  primary metric: {METRICS[0][0]}\n")
+            f.write(f"CONSISTENCY SUMMARY  —  primary metric: AP@[0.50:0.75]\n")
             f.write(f"Expected winner: {expected_winner}\n")
             f.write("WIN = ranks #1 on that dataset for this model\n")
             f.write("=" * 70 + "\n")

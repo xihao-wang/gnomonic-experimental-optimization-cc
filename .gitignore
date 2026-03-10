@@ -98,6 +98,9 @@ planning-data/
 evaluation/configs-comparison/
 evaluation/proj-conf-comparison/
 
+# Paper folder (managed separately)
+JOIG-Revising-Projection-Confg-for-Detection/
+
 # Irrelevant files or folders
 INFRASTRUCTURE_SUMMARY.txt
 CLAUDE.md
