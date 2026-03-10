@@ -1,16 +1,11 @@
-feat: add multi-model evaluation runner with rich progress display
+feat: add cross-model comparator with per-model head-to-head ranking
 
-Introduces run_multi_model.py to evaluate all projection configs across
-a list of YOLO models in one run. Results are isolated per model under
-OUTPUT_DIR/<model_label>/configs/ (existing architecture reused).
-
-Progress now prints inline context at every 50 frames:
-  [yolov8m (1/7) | chiang-2021-baseline (1/4) | bomni (1/3)]  150/245
-
-YOLO_IMGSZ is now a string key resolved against YOLO_IMGSZ_OPTIONS dict
-at runtime, making the selection explicit and validated (KeyError on invalid key).
-
-MULTI_MODEL_RUN config section added with a curated 7-model list covering
-v8 through v26, plus the exhaustive list kept as a commented reference.
+CrossModelComparator now produces per_model_head_to_head.txt alongside
+the existing overall_winner.txt. For each YOLO model and each dataset,
+all projection configs are ranked best-to-worst across all metrics
+(AP@[0.30:0.95], AP@[0.50:0.95], AP@0.50, AP@0.75, Precision@0.50,
+Recall@0.50, F1@0.50, FPS), with delta from rank-1 shown per entry.
+A consistency matrix at the bottom reports WIN/LOSS per model per dataset
+and the total count of models where the leading config wins consistently.
 
 Author: Yassir Zardoua <y.zardoua@caplogy.com>

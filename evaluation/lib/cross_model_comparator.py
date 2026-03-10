@@ -286,13 +286,32 @@ class CrossModelComparator(ConfigComparator):
         """
         Write per_model_head_to_head.txt.
 
-        For each YOLO model:
-          - Per dataset: rank all original config IDs best-to-worst by
-            AP@[0.30:0.95], showing value and delta from rank-1.
-          - Overall: rank by mean AP across datasets.
+        For each YOLO model, for each dataset, for each metric: rank all
+        original config IDs best-to-worst with value and delta from rank-1.
 
-        Bottom section: consistency summary matrix (WIN/LOSS per model per dataset).
+        Metrics: AP@[0.30:0.95], AP@[0.50:0.95], AP@0.50, AP@0.75,
+                 Precision@0.50, Recall@0.50, F1@0.50, FPS.
+
+        Bottom section: consistency summary matrix (WIN/LOSS per model per
+        dataset) based on the primary metric AP@[0.30:0.95].
         """
+        # Metrics to rank: (label, getter(d) -> float|None)
+        # d is data[label][dataset_name]
+        METRICS = [
+            ("AP@[0.30:0.95]",  lambda d: d["metrics"]["summary"].get("ap")),
+            ("AP@[0.50:0.95]",  lambda d: self._compute_coco_ap(d["metrics"])),
+            ("AP@0.50",         lambda d: d["metrics"]["summary"].get("ap50")),
+            ("AP@0.75",         lambda d: d["metrics"]["summary"].get("ap75")),
+            ("Precision@0.50",  lambda d: d["metrics"]["summary"].get("precision@0.5")),
+            ("Recall@0.50",     lambda d: d["metrics"]["summary"].get("recall@0.5")),
+            ("F1@0.50",         lambda d: d["metrics"]["summary"].get("f1@0.5")),
+            ("FPS",             lambda d: (
+                1.0 / d["timing"]["total_end_to_end"]["mean"]
+                if d.get("timing") and d["timing"].get("total_end_to_end", {}).get("mean")
+                else None
+            )),
+        ]
+
         # --- collect original config IDs (ordered by first appearance) ---
         all_orig_ids: List[str] = []
         seen_orig: set = set()
@@ -315,103 +334,79 @@ class CrossModelComparator(ConfigComparator):
                 models_ordered.append(model)
             by_model[model][orig_id] = label
 
-        # --- extract AP values: ap_vals[model][orig_id][dataset] ---
-        ap_vals: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {}
-        for model in models_ordered:
-            ap_vals[model] = {}
-            for orig_id in all_orig_ids:
-                ap_vals[model][orig_id] = {}
-                label = by_model[model].get(orig_id)
-                for ds in resolved_datasets:
-                    ap = None
-                    if label:
-                        d = data.get(label, {}).get(ds)
-                        if d is not None:
-                            ap = d["metrics"]["summary"].get("ap")
-                    ap_vals[model][orig_id][ds] = ap
-
-        # --- helper: rank orig_ids by a score dict, best first ---
+        # --- helper: rank orig_ids by score dict, best first ---
         def _rank(scores: Dict[str, Optional[float]]) -> List[str]:
             valid = [(oid, v) for oid, v in scores.items() if v is not None]
             return [oid for oid, _ in sorted(valid, key=lambda x: x[1], reverse=True)]
+
+        # --- extract primary metric for consistency matrix ---
+        primary_getter = METRICS[0][1]
 
         report_path = out_dir / "per_model_head_to_head.txt"
 
         with open(report_path, "w") as f:
             f.write("PER-MODEL HEAD-TO-HEAD RANKING\n")
             f.write("=" * 70 + "\n")
-            f.write("Metric shown: AP@[0.30:0.95] (rotated-box IoU, fisheye space)\n")
-            f.write("Configs ranked best-to-worst within each model and dataset.\n\n")
+            f.write("Configs ranked best-to-worst per metric, per dataset, per model.\n\n")
+
+            # Track primary-metric winner per (model, dataset) for consistency matrix
+            winner_matrix: Dict[str, Dict[str, Optional[str]]] = {}
 
             for model in models_ordered:
                 f.write("=" * 70 + "\n")
                 f.write(f"MODEL: {model}\n")
                 f.write("=" * 70 + "\n")
+                winner_matrix[model] = {}
 
-                # Per-dataset ranking
-                overall_scores: Dict[str, List[float]] = {oid: [] for oid in all_orig_ids}
                 for ds in resolved_datasets:
-                    scores_ds = {
-                        oid: ap_vals[model][oid][ds]
-                        for oid in all_orig_ids
-                        if ap_vals[model][oid][ds] is not None
-                    }
-                    ranked = _rank(scores_ds)
-                    best_val = scores_ds[ranked[0]] if ranked else None
+                    f.write(f"\n  --- Dataset: {ds.upper()} ---\n")
 
-                    f.write(f"\n  Dataset: {ds.upper()}\n")
-                    f.write(f"  {'Rank':<6}{'Config':<38}{'AP':>8}{'Delta':>10}\n")
-                    f.write("  " + "-" * 62 + "\n")
+                    for metric_label, getter in METRICS:
+                        scores: Dict[str, Optional[float]] = {}
+                        for orig_id in all_orig_ids:
+                            label = by_model[model].get(orig_id)
+                            val = None
+                            if label:
+                                d = data.get(label, {}).get(ds)
+                                if d is not None:
+                                    try:
+                                        val = getter(d)
+                                    except Exception:
+                                        val = None
+                            scores[orig_id] = val
 
-                    for rank, oid in enumerate(ranked, 1):
-                        val = scores_ds[oid]
-                        delta = (val - best_val) if rank > 1 else 0.0
-                        delta_str = f"{delta:+.3f}" if rank > 1 else "—"
-                        f.write(f"  {rank:<6}{oid:<38}{val:>8.3f}{delta_str:>10}\n")
-                        overall_scores[oid].append(val)
+                        ranked = _rank(scores)
+                        if not ranked:
+                            continue
+                        best_val = scores[ranked[0]]
 
-                # Overall (mean across datasets) ranking
-                mean_scores = {
-                    oid: float(sum(v) / len(v))
-                    for oid, v in overall_scores.items()
-                    if v
-                }
-                ranked_overall = _rank(mean_scores)
-                best_mean = mean_scores[ranked_overall[0]] if ranked_overall else None
+                        f.write(f"\n  {metric_label}\n")
+                        f.write(f"  {'Rank':<6}{'Config':<38}{'Value':>8}{'Delta':>10}\n")
+                        f.write("  " + "-" * 62 + "\n")
+                        for rank, oid in enumerate(ranked, 1):
+                            val = scores[oid]
+                            delta = (val - best_val) if rank > 1 else 0.0
+                            delta_str = f"{delta:+.3f}" if rank > 1 else "—"
+                            f.write(f"  {rank:<6}{oid:<38}{val:>8.3f}{delta_str:>10}\n")
 
-                f.write(f"\n  Overall (mean across {len(resolved_datasets)} datasets):\n")
-                f.write(f"  {'Rank':<6}{'Config':<38}{'Mean AP':>8}{'Delta':>10}\n")
-                f.write("  " + "-" * 62 + "\n")
-                for rank, oid in enumerate(ranked_overall, 1):
-                    val = mean_scores[oid]
-                    delta = (val - best_mean) if rank > 1 else 0.0
-                    delta_str = f"{delta:+.3f}" if rank > 1 else "—"
-                    f.write(f"  {rank:<6}{oid:<38}{val:>8.3f}{delta_str:>10}\n")
+                        # Record primary metric winner
+                        if metric_label == METRICS[0][0]:
+                            winner_matrix[model][ds] = ranked[0] if ranked else None
 
                 f.write("\n")
 
-            # ---- Consistency summary matrix ----
-            # Determine "expected winner" as whichever orig_id appears most often at rank 1
+            # ---- Consistency summary matrix (primary metric: AP@[0.30:0.95]) ----
             win_count: Dict[str, int] = {oid: 0 for oid in all_orig_ids}
-            winner_matrix: Dict[str, Dict[str, Optional[str]]] = {}
             for model in models_ordered:
-                winner_matrix[model] = {}
                 for ds in resolved_datasets:
-                    scores_ds = {
-                        oid: ap_vals[model][oid][ds]
-                        for oid in all_orig_ids
-                        if ap_vals[model][oid][ds] is not None
-                    }
-                    ranked = _rank(scores_ds)
-                    w = ranked[0] if ranked else None
-                    winner_matrix[model][ds] = w
+                    w = winner_matrix.get(model, {}).get(ds)
                     if w:
                         win_count[w] += 1
 
             expected_winner = max(win_count, key=win_count.__getitem__) if win_count else None
 
             f.write("=" * 70 + "\n")
-            f.write("CONSISTENCY SUMMARY\n")
+            f.write(f"CONSISTENCY SUMMARY  —  primary metric: {METRICS[0][0]}\n")
             f.write(f"Expected winner: {expected_winner}\n")
             f.write("WIN = ranks #1 on that dataset for this model\n")
             f.write("=" * 70 + "\n")
@@ -429,7 +424,7 @@ class CrossModelComparator(ConfigComparator):
                 row = f"  {model:<18}"
                 model_consistent = True
                 for ds in resolved_datasets:
-                    w = winner_matrix[model].get(ds)
+                    w = winner_matrix.get(model, {}).get(ds)
                     won = (w == expected_winner)
                     if not won:
                         model_consistent = False
