@@ -138,6 +138,12 @@ class SingleConfigRunner:
         self.vis_max_samples = vis_max_samples or {}
         self.vis_spread_samples = vis_spread_samples
         self.yolo_imgsz = yolo_imgsz
+        # Per-config override: if the config dict carries a "yolo_imgsz" key, it
+        # takes precedence over the globally configured value.  This lets resolution
+        # ablation variants (e.g. TEST#26-res320) set their own inference size
+        # without touching the global config.
+        if "yolo_imgsz" in config:
+            self.yolo_imgsz = int(config["yolo_imgsz"])
         self.model_idx = model_idx
         self.model_total = model_total
         self.config_idx = config_idx

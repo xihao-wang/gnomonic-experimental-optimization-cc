@@ -18,6 +18,7 @@ Date: 2026-03-03
 """
 
 import sys
+import shutil
 import importlib
 from pathlib import Path
 
@@ -25,6 +26,32 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from evaluation.lib.config import get_cfg, YOLO_IMGSZ_OPTIONS
 from evaluation.lib.single_config_runner import SingleConfigRunner
+
+
+def _ensure_model(model_path: Path) -> bool:
+    """
+    Ensure a YOLO model .pt file exists at model_path.
+    If missing, downloads it via ultralytics (using the filename as the hub key)
+    and copies the result into model_path.
+
+    Returns True if the model is ready, False if download failed.
+    """
+    if model_path.exists():
+        return True
+
+    model_filename = model_path.name
+    print(f"\n[DOWNLOAD] {model_filename} not found — downloading via ultralytics hub...")
+    try:
+        from ultralytics import YOLO as _YOLO
+        tmp = _YOLO(model_filename)   # downloads to ultralytics cache
+        cached = Path(tmp.ckpt_path)
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(cached, model_path)
+        print(f"[DOWNLOAD] Saved to {model_path}")
+        return True
+    except Exception as e:
+        print(f"[SKIP] Could not download {model_filename}: {e}")
+        return False
 
 
 def main():
@@ -79,7 +106,10 @@ def main():
     total_skipped = 0
 
     for m_idx, model_filename in enumerate(model_filenames, start=1):
-        model_path  = str(project_root / "models" / model_filename)
+        model_path = project_root / "models" / model_filename
+        if not _ensure_model(model_path):
+            continue
+        model_path  = str(model_path)
         model_label = Path(model_filename).stem
         configs_output_dir = str(Path(me.OUTPUT_DIR) / model_label / "configs")
 

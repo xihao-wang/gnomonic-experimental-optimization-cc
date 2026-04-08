@@ -410,6 +410,53 @@ class ProjectionConfigs:
         "comp_sz": [640, 640],
         "target_mp": "auto"
     },
+    # ── Resolution ablation: TEST#26 at lower inference sizes ──────────────────
+    # Same projection geometry as TEST#26 (our proposed config) — only the
+    # composite cell size and YOLO inference resolution are reduced.
+    # The "yolo_imgsz" field overrides the global YOLO_IMGSZ for these configs.
+    # Tested at all standard YOLO resolutions below 640: 512, 416, 320.
+    {
+        "id": "TEST#26-res512",
+        "name": "TEST#26 at 512px resolution (6 proj, 2x3 grid, 60x85 FOV, lat45)",
+        "proj_nbr": 6,
+        "fov_h": 60.0,
+        "fov_v": 85.0,
+        "latitude": 45.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 6,
+        "grid": [2, 3],
+        "comp_sz": [512, 512],
+        "target_mp": "auto",
+        "yolo_imgsz": 512
+    },
+    {
+        "id": "TEST#26-res416",
+        "name": "TEST#26 at 416px resolution (6 proj, 2x3 grid, 60x85 FOV, lat45)",
+        "proj_nbr": 6,
+        "fov_h": 60.0,
+        "fov_v": 85.0,
+        "latitude": 45.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 6,
+        "grid": [2, 3],
+        "comp_sz": [416, 416],
+        "target_mp": "auto",
+        "yolo_imgsz": 416
+    },
+    {
+        "id": "TEST#26-res320",
+        "name": "TEST#26 at 320px resolution (6 proj, 2x3 grid, 60x85 FOV, lat45)",
+        "proj_nbr": 6,
+        "fov_h": 60.0,
+        "fov_v": 85.0,
+        "latitude": 45.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 6,
+        "grid": [2, 3],
+        "comp_sz": [320, 320],
+        "target_mp": "auto",
+        "yolo_imgsz": 320
+    },
     {
         "id": "TEST#27-h60-v85-g(2,3)-pad14v",
         "name": "TEST#26 + 14% vertical padding (6 proj, 2x3 grid, 60x85 FOV, lat45)",

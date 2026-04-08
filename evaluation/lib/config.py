@@ -336,20 +336,22 @@ _C.METRICS_EVALUATION.YOLO_MODEL = "yolov9e.pt"
 _C.METRICS_EVALUATION.YOLO_IMGSZ = "640"
 
 # Datasets to evaluate — options: "bomni", "piropo", "cepdof"
-_C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]
+# BOMNI excluded from cross-model study (only ~250 samples vs ~3000 for PIROPO/CEPDOF)
+_C.METRICS_EVALUATION.DATASETS = ["piropo", "cepdof"]
 
 # Root output directory (sessions and per-config result folders are created inside)
 _C.METRICS_EVALUATION.OUTPUT_DIR = "evaluation/proj-conf-comparison"
 
-# IoU thresholds for evaluation: AP@[0.50:0.75] (6 thresholds, step 0.05)
-# Rationale: predictions are radially aligned by design; GT annotations on CEPDOF
-# are free-orientation. High thresholds (0.80–0.95) penalise this systematic
-# convention mismatch rather than localisation error. Truncating the ceiling at
-# 0.75 removes thresholds where annotation convention dominates the score.
-# The floor stays at 0.50 (standard Pascal VOC threshold) — lowering it would
-# inflate AP with near-misses and is not justified here.
+# IoU thresholds for evaluation (step 0.05, floor 0.50).
+# The full range 0.50–0.95 is stored so that both AP@[0.50:0.75] (primary
+# metric, 6 thresholds) and AP@[0.50:0.95] (COCO-style reference, 10
+# thresholds) can be derived by the comparator from a single run.
+# Rationale for primary metric ceiling at 0.75: predictions are radially
+# aligned by design; GT annotations on CEPDOF are free-orientation. Thresholds
+# above 0.75 penalise this systematic convention mismatch rather than genuine
+# localisation error. The floor stays at 0.50 (Pascal VOC standard).
 _C.METRICS_EVALUATION.IOU_THRESHOLDS = [
-    0.50, 0.55, 0.60, 0.65, 0.70, 0.75
+    0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95
 ]
 
 # Enable pipeline timing measurements
@@ -412,26 +414,33 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
 # Config search study: effect of projection configuration parameters.
 # Progression: 4 proj (wide FOV) → 6 proj (our family) → 8 proj (Chiang) → 9 proj.
 # Already-evaluated configs (TEST#26, chiang) are skipped automatically.
+# _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = [
+#     # 4 projections — low count, high FOV baselines
+#     "TEST#05-h90-v90-g(2,2)",       # 4 proj, 90×90 FOV, lat45 — zero h-overlap baseline
+#     "TEST#07-h106-v80-g(2,2)",      # 4 proj, 106×80 FOV, lat50 — wider FOV, steeper look
+#     # 6 projections — parameter sweep within the winning family
+#     "TEST#04-h60-v90-g(2,3)",       # 6 proj, 60×90 FOV, lat45 — zero h-overlap reference
+#     "TEST#09-h70-v90-g(2,3)",       # 6 proj, 70×90 FOV, lat45 — 10° h-overlap (isolates overlap effect)
+#     "TEST#23-h60-v90-g(2,3)",       # 6 proj, 60×90 FOV, lat50 — isolates latitude vs TEST#04
+#     "TEST#26-h60-v90-g(2,3)",       # 6 proj, OUR PROPOSED — already run, skipped automatically
+#     # 8 projections — Chiang baseline
+#     "chiang-2021-baseline",         # 8 proj, 48×96 FOV, lat36 — already run, skipped automatically
+#     # 9 projections — finer angular sampling, overlap progression
+#     "TEST#15-h40-v90-g(3,3)",       # 9 proj, 40×90 FOV, lat45 — zero h-overlap baseline
+#     "TEST#16-h50-v90-g(3,3)",       # 9 proj, 50×90 FOV, lat45 — 10° h-overlap
+#     "TEST#17-h60-v90-g(3,3)",       # 9 proj, 60×90 FOV, lat45 — 20° h-overlap (same fov_h as our 6-proj)
+#     # Resolution ablation: TEST#26 at all standard YOLO sizes below 640px
+#     "TEST#26-res512",               # TEST#26 geometry, 512px composite + inference
+#     "TEST#26-res416",               # TEST#26 geometry, 416px composite + inference
+#     "TEST#26-res320",               # TEST#26 geometry, 320px composite + inference
+# ]
 _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = [
-    # 4 projections — low count, high FOV baselines
-    "TEST#05-h90-v90-g(2,2)",       # 4 proj, 90×90 FOV, lat45 — zero h-overlap baseline
-    "TEST#07-h106-v80-g(2,2)",      # 4 proj, 106×80 FOV, lat50 — wider FOV, steeper look
-    # 6 projections — parameter sweep within the winning family
-    "TEST#04-h60-v90-g(2,3)",       # 6 proj, 60×90 FOV, lat45 — zero h-overlap reference
-    "TEST#09-h70-v90-g(2,3)",       # 6 proj, 70×90 FOV, lat45 — 10° h-overlap (isolates overlap effect)
-    "TEST#23-h60-v90-g(2,3)",       # 6 proj, 60×90 FOV, lat50 — isolates latitude vs TEST#04
-    "TEST#26-h60-v90-g(2,3)",       # 6 proj, OUR PROPOSED — already run, skipped automatically
-    # 8 projections — Chiang baseline
-    "chiang-2021-baseline",         # 8 proj, 48×96 FOV, lat36 — already run, skipped automatically
-    # 9 projections — finer angular sampling, overlap progression
-    "TEST#15-h40-v90-g(3,3)",       # 9 proj, 40×90 FOV, lat45 — zero h-overlap baseline
-    "TEST#16-h50-v90-g(3,3)",       # 9 proj, 50×90 FOV, lat45 — 10° h-overlap
-    "TEST#17-h60-v90-g(3,3)",       # 9 proj, 60×90 FOV, lat45 — 20° h-overlap (same fov_h as our 6-proj)
+    "TEST#26-h60-v90-g(2,3)",   # proposed best config — fixed for cross-model attention study
 ]
 
 # When False (default), skip configs whose result folder already exists.
 # Set to True to force re-evaluation and overwrite existing results.
-_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = False
+_C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.OVERWRITE_EXISTING = True
 
 # ----------------------------------------------------------------------------
 # METRICS_EVALUATION.MULTI_MODEL_RUN: run all configs across several YOLO models
@@ -441,26 +450,27 @@ _C.METRICS_EVALUATION.MULTI_MODEL_RUN = CN()
 
 # Model filenames to test — specify the .pt filename only.
 # Full path resolved automatically as <project_root>/models/<filename>.
-# _C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
-#     # YOLOv8 (2023) — n/s/m/l/x
-#     "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
-#     # YOLOv9 (2024) — c (compact) / e (extended); no n/s/m/l/x naming
-#     "yolov9c.pt", "yolov9e.pt",
-#     # YOLOv10 (2024) — n/s/m/b/l/x (adds 'b' size)
-#     "yolov10n.pt", "yolov10s.pt", "yolov10m.pt", "yolov10b.pt", "yolov10l.pt", "yolov10x.pt",
-#     # YOLO11 (2024) — n/s/m/l/x
-#     "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt",
-#     # YOLO12 (2025) — n/s/m/l/x
-#     "yolo12n.pt", "yolo12s.pt", "yolo12m.pt", "yolo12l.pt", "yolo12x.pt",
-#     # YOLO26 (Jan 2026) — n/s/m/l/x
-#     "yolo26n.pt", "yolo26s.pt", "yolo26m.pt", "yolo26l.pt", "yolo26x.pt",
-# ]
+# Cross-model attention study: medium variants only, one per YOLO generation.
+# Goal: isolate the effect of self-attention mechanisms on composite tiled images
+# across generations (YOLOv8 CNN-only → YOLOv9 GELAN → v10/v11/v12/v13 attention).
+# NOTE: YOLOv9 has no medium variant; yolov9c (compact) is the closest proxy.
+_C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
+    "yolo13m.pt",   # YOLO13  (2025) — further attention refinement
+    "yolov5mu.pt",  # YOLOv5  (2020) — pure CNN, earliest ultralytics medium baseline
+    "yolov8m.pt",   # YOLOv8  (2023) — pure CNN (C2f), no attention
+    "yolov9c.pt",   # YOLOv9  (2024) — GELAN, no self-attention (closest to medium)
+    "yolov10m.pt",  # YOLOv10 (2024) — attention in head
+    "yolo11m.pt",   # YOLO11  (2024) — C2PSA cross-spatial attention
+    "yolo12m.pt",   # YOLO12  (2025) — deeper attention integration
+]
+
+
 # Config search study uses YOLOv9e only (fixed backbone for fair parameter comparison).
 # Restore the full list below once the config search study is complete and
 # you want to re-run the cross-model study with the new configs.
-_C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
-    "yolov9e.pt",   # config search study: fixed backbone
-]
+# _C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
+#     "yolov9e.pt",   # config search study: fixed backbone
+# ]
 # Full multi-model list (uncomment to restore for cross-model studies):
 # _C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
 #     "yolov8n.pt", "yolov8m.pt", "yolov9e.pt",
@@ -482,20 +492,7 @@ _C.COMPARATOR = CN()
 # Config IDs to compare. Empty list = compare ALL configs found automatically.
 # _C.COMPARATOR.CONFIG_IDS = []
 _C.COMPARATOR.CONFIG_IDS = [
-    # 4 projections — low count, high FOV baselines
-    "TEST#05-h90-v90-g(2,2)",       # 4 proj, 90×90 FOV, lat45 — zero h-overlap baseline
-    "TEST#07-h106-v80-g(2,2)",      # 4 proj, 106×80 FOV, lat50 — wider FOV, steeper look
-    # 6 projections — parameter sweep within the winning family
-    "TEST#04-h60-v90-g(2,3)",       # 6 proj, 60×90 FOV, lat45 — zero h-overlap reference
-    "TEST#09-h70-v90-g(2,3)",       # 6 proj, 70×90 FOV, lat45 — 10° h-overlap (isolates overlap effect)
-    "TEST#23-h60-v90-g(2,3)",       # 6 proj, 60×90 FOV, lat50 — isolates latitude vs TEST#04
-    "TEST#26-h60-v90-g(2,3)",       # 6 proj, OUR PROPOSED — already run, skipped automatically
-    # 8 projections — Chiang baseline
-    "chiang-2021-baseline",         # 8 proj, 48×96 FOV, lat36 — already run, skipped automatically
-    # 9 projections — finer angular sampling, overlap progression
-    "TEST#15-h40-v90-g(3,3)",       # 9 proj, 40×90 FOV, lat45 — zero h-overlap baseline
-    "TEST#16-h50-v90-g(3,3)",       # 9 proj, 50×90 FOV, lat45 — 10° h-overlap
-    "TEST#17-h60-v90-g(3,3)",       # 9 proj, 60×90 FOV, lat45 — 20° h-overlap (same fov_h as our 6-proj)
+    "TEST#26-h60-v90-g(2,3)",       # reference — 640px (our proposed config)
 ]
 
 # Datasets to include in the comparison
@@ -522,7 +519,7 @@ _C.CROSS_MODEL_COMPARATOR.MODELS = []
 
 # Original config IDs to include (without model suffix).
 # Empty list = all configs found across all selected model folders.
-_C.CROSS_MODEL_COMPARATOR.CONFIG_IDS = ["chiang-2021-baseline", "TEST#26-h60-v90-g(2,3)"]
+_C.CROSS_MODEL_COMPARATOR.CONFIG_IDS = ["TEST#30-h65-v90-g(2,3)", "chiang-2021-baseline", "TEST#26-h60-v90-g(2,3)"]
 
 # Datasets to include in the comparison.
 _C.CROSS_MODEL_COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]

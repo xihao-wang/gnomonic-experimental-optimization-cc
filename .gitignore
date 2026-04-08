@@ -97,6 +97,7 @@ coding-data/
 planning-data/
 evaluation/configs-comparison/
 evaluation/proj-conf-comparison/
+evaluation/archived-proj-conf-comparison/
 
 # Paper folder (managed separately)
 JOIG-Revising-Projection-Confg-for-Detection/
