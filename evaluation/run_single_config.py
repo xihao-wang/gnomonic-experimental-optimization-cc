@@ -130,7 +130,7 @@ def main():
                 enable_visuals=vis.ENABLE,
                 max_images=me.MAX_IMAGES,
                 spread_samples=me.SPREAD_SAMPLES,
-                overwrite_existing=scr.OVERWRITE_EXISTING,
+                overwrite_existing=mmr.OVERWRITE_EXISTING if mmr.MODELS else scr.OVERWRITE_EXISTING,
                 vis_iou_threshold=vis.IOU_THRESHOLD,
                 proj_boundary_colors=[tuple(c) for c in vis.PROJ_BOUNDARY_COLORS],
                 vis_max_samples={

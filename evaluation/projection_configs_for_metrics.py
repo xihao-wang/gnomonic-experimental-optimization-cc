@@ -525,5 +525,34 @@ class ProjectionConfigs:
         "grid": [2, 3],
         "comp_sz": [640, 640],
         "target_mp": "auto"
+    },
+    {
+        "id": "TEST#31-h70-v106-g(2,3)",
+        "name": "Experimental test (6 proj, 2x3 grid, 65x90 FOV, lat45)",
+        "proj_nbr": 6,
+        "fov_h": 70.0,
+        "fov_v": 106.0,
+        "latitude": 106.0/2,
+        "lon_0": 0.0,
+        "lon_step": 360 / 6,
+        "grid": [2, 3],
+        "comp_sz": [640, 640],
+        "target_mp": "auto"
+    },
+    {
+        "id": "TEST#32-central-9×9",
+        "name": "1 central (lat0, 90x90) + 5 peripheral (lat65, 80x70) — 2x3 grid",
+        "proj_nbr": 8,
+        "fov_h": 55.0,
+        "fov_v": 80.0,
+        "latitude": 55.0,
+        "lon_0": 0.0,
+        "lon_step": 360 / 8,
+        "grid": [3, 3],
+        "comp_sz": [640, 640],
+        "target_mp": "auto",
+        "extra_projections": [
+            {"longitude": 0.0, "latitude": 0.1, "fov_h": 40.0, "fov_v": 40.0, "pos": [0, 0]}
+        ]
     }
     ]

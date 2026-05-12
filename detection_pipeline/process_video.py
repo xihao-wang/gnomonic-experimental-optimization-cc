@@ -45,21 +45,21 @@ SAVE_COMPOSITE_VIDEO = True
 # Projection configuration
 # Option 1: Use preset (set to preset name, manual params below will be ignored)
 # Option 2: Use manual params (set to None, then configure params below)
-PROJECTION_PRESET = "wide_angle"  # Set to "yolo_grid", "default", "high_coverage", etc. or None
+PROJECTION_PRESET = None  # Set to "yolo_grid", "default", "high_coverage", etc. or None
 
 # Manual projection parameters (only used if PROJECTION_PRESET = None)
-PROJ_NBR = 4
-FOV_H = 70.0  # degrees
-FOV_V = 70.0  # degrees
+PROJ_NBR = 6
+FOV_H = 60.0  # degrees
+FOV_V = 85.0  # degrees
 LATITUDE = 45.0
 LON_0 = 0.0
-LON_STEP = 40.0
-GRID = [2, 2]  # [rows, cols]
+LON_STEP = 360/6
+GRID = [2, 3]  # [rows, cols]
 COMP_SIZE = [640, 640]  # [width, height]
 TARGET_MP = "auto"
 
 # YOLO configuration
-YOLO_MODEL = "models/yolov8m.pt"
+YOLO_MODEL = "models/yolov9e.pt"
 YOLO_CONFIDENCE = 0.25  # Initial filter - removes very weak detections
 YOLO_DEVICE = "cuda"  # None for auto-detect, "cuda" or "cpu"
 

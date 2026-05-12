@@ -337,7 +337,7 @@ _C.METRICS_EVALUATION.YOLO_IMGSZ = "640"
 
 # Datasets to evaluate — options: "bomni", "piropo", "cepdof"
 # BOMNI excluded from cross-model study (only ~250 samples vs ~3000 for PIROPO/CEPDOF)
-_C.METRICS_EVALUATION.DATASETS = ["piropo", "cepdof"]
+_C.METRICS_EVALUATION.DATASETS = ["bomni", "piropo", "cepdof"]
 
 # Root output directory (sessions and per-config result folders are created inside)
 _C.METRICS_EVALUATION.OUTPUT_DIR = "evaluation/proj-conf-comparison"
@@ -435,7 +435,7 @@ _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN = CN()
 #     "TEST#26-res320",               # TEST#26 geometry, 320px composite + inference
 # ]
 _C.METRICS_EVALUATION.SINGLE_CONFIG_RUN.CONFIG_IDS = [
-    "TEST#26-h60-v90-g(2,3)",   # proposed best config — fixed for cross-model attention study
+    "TEST#32-central-9×9",   # proposed best config — fixed for cross-model attention study
 ]
 
 # When False (default), skip configs whose result folder already exists.
@@ -455,13 +455,42 @@ _C.METRICS_EVALUATION.MULTI_MODEL_RUN = CN()
 # across generations (YOLOv8 CNN-only → YOLOv9 GELAN → v10/v11/v12/v13 attention).
 # NOTE: YOLOv9 has no medium variant; yolov9c (compact) is the closest proxy.
 _C.METRICS_EVALUATION.MULTI_MODEL_RUN.MODELS = [
-    "yolo13m.pt",   # YOLO13  (2025) — further attention refinement
-    "yolov5mu.pt",  # YOLOv5  (2020) — pure CNN, earliest ultralytics medium baseline
-    "yolov8m.pt",   # YOLOv8  (2023) — pure CNN (C2f), no attention
-    "yolov9c.pt",   # YOLOv9  (2024) — GELAN, no self-attention (closest to medium)
-    "yolov10m.pt",  # YOLOv10 (2024) — attention in head
-    "yolo11m.pt",   # YOLO11  (2024) — C2PSA cross-spatial attention
-    "yolo12m.pt",   # YOLO12  (2025) — deeper attention integration
+    # # Non-attention — YOLOv8 full size ladder (n/s/m/l/x)
+    # "yolov8n.pt",   # YOLOv8 nano   (~3M params)
+    # "yolov8s.pt",   # YOLOv8 small  (~11M params)
+    # "yolov8m.pt",   # YOLOv8 medium (~26M params)
+    # "yolov8l.pt",   # YOLOv8 large  (~44M params)
+    # "yolov8x.pt",   # YOLOv8 xlarge (~68M params)
+    # # Non-attention — YOLOv5 full size ladder (n/s/m/l/x)
+    # "yolov5nu.pt",  # YOLOv5 nano   (~2.6M params)
+    # "yolov5su.pt",  # YOLOv5 small  (~9.1M params)
+    # "yolov5mu.pt",  # YOLOv5 medium (~25.1M params)
+    # "yolov5lu.pt",  # YOLOv5 large  (~53.2M params)
+    # "yolov5xu.pt",  # YOLOv5 xlarge (~97.2M params)
+    # # Non-attention — YOLOv9 GELAN (t/s/m/c/e)
+    # "yolov9t.pt",   # YOLOv9 tiny     (~2.0M params)
+    # "yolov9s.pt",   # YOLOv9 small    (~7.2M params)
+    # "yolov9m.pt",   # YOLOv9 medium   (~20.1M params)
+    # "yolov9c.pt",   # YOLOv9 compact  (~25.5M params)
+    "yolov9e.pt",   # YOLOv9 extended (~58.1M params)
+    # # Attention — YOLOv10 (nano / small / medium / large / xlarge)
+    # "yolov10n.pt",  # YOLOv10 nano
+    # "yolov10s.pt",  # YOLOv10 small
+    # "yolov10m.pt",  # YOLOv10 medium
+    # "yolov10l.pt",  # YOLOv10 large
+    # "yolov10x.pt",  # YOLOv10 xlarge
+    # # Attention — YOLO11 (nano / small / medium / large / xlarge)
+    # "yolo11n.pt",   # YOLO11 nano
+    # "yolo11s.pt",   # YOLO11 small
+    # "yolo11m.pt",   # YOLO11 medium
+    # "yolo11l.pt",   # YOLO11 large
+    # "yolo11x.pt",   # YOLO11 xlarge
+    # # Attention — YOLO12 (nano / small / medium / large / xlarge)
+    # "yolo12n.pt",   # YOLO12 nano
+    # "yolo12s.pt",   # YOLO12 small
+    # "yolo12m.pt",   # YOLO12 medium
+    # "yolo12l.pt",   # YOLO12 large
+    # "yolo12x.pt",   # YOLO12 xlarge
 ]
 
 
@@ -492,7 +521,7 @@ _C.COMPARATOR = CN()
 # Config IDs to compare. Empty list = compare ALL configs found automatically.
 # _C.COMPARATOR.CONFIG_IDS = []
 _C.COMPARATOR.CONFIG_IDS = [
-    "TEST#26-h60-v90-g(2,3)",       # reference — 640px (our proposed config)
+    "TEST#26-h60-v90-g(2,3)", "TEST#32-central-9×9","TEST#31-h70-v106-g(2,3)", "chiang-2021-baseline"       # reference — 640px (our proposed config)
 ]
 
 # Datasets to include in the comparison
@@ -519,13 +548,22 @@ _C.CROSS_MODEL_COMPARATOR.MODELS = []
 
 # Original config IDs to include (without model suffix).
 # Empty list = all configs found across all selected model folders.
-_C.CROSS_MODEL_COMPARATOR.CONFIG_IDS = ["TEST#30-h65-v90-g(2,3)", "chiang-2021-baseline", "TEST#26-h60-v90-g(2,3)"]
+_C.CROSS_MODEL_COMPARATOR.CONFIG_IDS = ["TEST#26-h60-v90-g(2,3)"]
 
 # Datasets to include in the comparison.
 _C.CROSS_MODEL_COMPARATOR.DATASETS = ["bomni", "piropo", "cepdof"]
 
 # Enable figure generation (bar charts, PR overlay plots).
 _C.CROSS_MODEL_COMPARATOR.ENABLE_FIGURES = True
+
+# Comparison mode:
+#   "config_search" — given multiple configs × multiple models, which projection
+#                     config is best? (original behaviour, per-model head-to-head)
+#   "model_ranking" — given a fixed projection config × multiple models, which
+#                     model performs best? outputs per-dataset model tables +
+#                     attention vs CNN group analysis. Per-model head-to-head
+#                     is suppressed (irrelevant with a single config).
+_C.CROSS_MODEL_COMPARATOR.MODE = "model_ranking"
 
 # Results are written to:
 #   METRICS_EVALUATION.OUTPUT_DIR / "cross-model" / comparison_{timestamp}/

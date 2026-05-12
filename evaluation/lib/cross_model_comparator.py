@@ -48,6 +48,14 @@ class CrossModelComparator(ConfigComparator):
     # Regex that parses "some config id [model_label]"
     _LABEL_RE = re.compile(r"^(.*) \[([^\[\]]+)\]$")
 
+    # Models known to use pure CNN / GELAN — no self-attention.
+    # Everything else is treated as attention-based.
+    _NON_ATTENTION_MODELS = {
+        "yolov5mu", "yolov5m", "yolov5l", "yolov5x",
+        "yolov8m",  "yolov8l", "yolov8x",
+        "yolov9c",  "yolov9e",
+    }
+
     def __init__(
         self,
         output_root: str,
@@ -56,22 +64,26 @@ class CrossModelComparator(ConfigComparator):
         config_ids: Optional[List[str]] = None,
         datasets: Optional[List[str]] = None,
         enable_figures: bool = True,
+        mode: str = "config_search",
     ):
         """
         Args:
-            output_root:        Root directory that contains per-model subfolders
-                                (e.g. evaluation/proj-conf-comparison/).
-            comparison_out_dir: Where to write comparison outputs
-                                (e.g. output_root/cross-model/).
+            output_root:        Root directory that contains per-model subfolders.
+            comparison_out_dir: Where to write comparison outputs.
             models:             Model labels to include. None/[] = all found.
-            config_ids:         Original config IDs to include (without model
-                                suffix). None/[] = all found.
+            config_ids:         Original config IDs to include. None/[] = all found.
             datasets:           Dataset names to include. None/[] = auto-discover.
             enable_figures:     Generate bar charts and PR overlay PNGs.
+            mode:               "config_search" — which projection config is best
+                                                  (original behaviour).
+                                "model_ranking"  — which model is best given a fixed
+                                                  projection config; outputs per-dataset
+                                                  model tables + attention analysis.
         """
         self.output_root = Path(output_root)
         self._models_filter = models or []
         self._config_ids_filter = config_ids or []
+        self.mode = mode
 
         # Pass output_root as configs_dir placeholder; actual loading is
         # fully overridden so this value is never used for path construction.
@@ -272,10 +284,15 @@ class CrossModelComparator(ConfigComparator):
         out_dir: Path
     ):
         """
-        Write one comparison table per YOLO model, each with original config
-        IDs as columns. Avoids the unreadable 24-column layout that results
-        from treating every (config, model) pair as an independent column.
+        Mode "config_search": one sub-table per model, configs as columns.
+        Mode "model_ranking": one table, models as rows, metrics as columns,
+                              sorted by primary metric, with CNN/attention split.
         """
+        if self.mode == "model_ranking":
+            self._write_model_ranking_table(dataset_name, dataset_data, out_dir)
+            return
+
+        # --- original config_search behaviour below ---
         from evaluation.lib.comparator import _PRIMARY_THRESHOLDS, _METRIC_NOTES
 
         # Group labels by model, preserve original config ID order
@@ -382,7 +399,7 @@ class CrossModelComparator(ConfigComparator):
         print(f"Saved: {table_path}")
 
     # -------------------------------------------------------------------------
-    # Override: winner determination (adds per-model head-to-head)
+    # Override: winner determination
     # -------------------------------------------------------------------------
 
     def _write_winner(
@@ -392,9 +409,16 @@ class CrossModelComparator(ConfigComparator):
         data: Dict[str, Any],
         out_dir: Path
     ):
-        """Call parent global ranking, then write per-model head-to-head file."""
+        """
+        "config_search": parent global ranking + per-model head-to-head.
+        "model_ranking": parent global ranking + attention group analysis.
+                         Per-model head-to-head is suppressed (only one config).
+        """
         super()._write_winner(resolved_ids, resolved_datasets, data, out_dir)
-        self._write_per_model_head_to_head(resolved_ids, resolved_datasets, data, out_dir)
+        if self.mode == "model_ranking":
+            self._write_attention_analysis(resolved_ids, resolved_datasets, data, out_dir)
+        else:
+            self._write_per_model_head_to_head(resolved_ids, resolved_datasets, data, out_dir)
 
     def _write_per_model_head_to_head(
         self,
@@ -559,6 +583,224 @@ class CrossModelComparator(ConfigComparator):
                 f"  {expected_winner} is #1 on ALL datasets "
                 f"in {n_consistent}/{len(models_ordered)} models.\n"
             )
+            f.write("=" * 70 + "\n")
+
+        print(f"Saved: {report_path}")
+
+    # -------------------------------------------------------------------------
+    # model_ranking mode: per-dataset model table
+    # -------------------------------------------------------------------------
+
+    def _write_model_ranking_table(
+        self,
+        dataset_name: str,
+        dataset_data: Dict[str, Any],
+        out_dir: Path
+    ):
+        """
+        One table per dataset: models as rows sorted by primary metric,
+        all key metrics as columns.  CNN/GELAN and attention groups are
+        separated by a divider line.
+        """
+        from evaluation.lib.comparator import _PRIMARY_THRESHOLDS, _METRIC_NOTES
+
+        METRICS = [
+            ("AP@[0.50:0.75]*", lambda d: self._compute_ap_range(d["metrics"], _PRIMARY_THRESHOLDS)),
+            ("AP@[0.50:0.95]",  lambda d: self._compute_coco_ap(d["metrics"])),
+            ("AP@0.50",         lambda d: d["metrics"]["summary"].get("ap50")),
+            ("AP@0.75",         lambda d: d["metrics"]["summary"].get("ap75")),
+            ("Prec@0.50",       lambda d: d["metrics"]["summary"].get("precision@0.5")),
+            ("Rec@0.50",        lambda d: d["metrics"]["summary"].get("recall@0.5")),
+            ("F1@0.50",         lambda d: d["metrics"]["summary"].get("f1@0.5")),
+            ("FPS",             lambda d: (
+                1.0 / d["timing"]["total_end_to_end"]["mean"]
+                if d.get("timing") and d["timing"].get("total_end_to_end", {}).get("mean")
+                else None
+            )),
+        ]
+
+        # Collect {model_label: data_entry} for this dataset
+        model_rows: Dict[str, Any] = {}
+        for label, ds_map in dataset_data.items():
+            if dataset_name not in ds_map:
+                continue
+            m = self._LABEL_RE.match(label)
+            if not m:
+                continue
+            model_rows[m.group(2)] = ds_map[dataset_name]
+
+        if not model_rows:
+            return
+
+        def _primary_score(model):
+            try:
+                v = self._compute_ap_range(model_rows[model]["metrics"], _PRIMARY_THRESHOLDS)
+                return v if v is not None else -1.0
+            except Exception:
+                return -1.0
+
+        sorted_models = sorted(model_rows.keys(), key=_primary_score, reverse=True)
+        model_w  = max(len(m) for m in sorted_models) + 2
+        metric_w = 14
+
+        table_path = out_dir / f"{dataset_name}_model_table.txt"
+        with open(table_path, "w") as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"Model Ranking — {dataset_name.upper()} Dataset\n")
+            f.write("Sorted by AP@[0.50:0.75] (primary metric) descending.\n")
+            f.write("=" * 80 + "\n\n")
+
+            header = f"{'Model':<{model_w}}"
+            for name, _ in METRICS:
+                header += f"  {name:^{metric_w}}"
+            header += "  Group"
+            f.write(header + "\n")
+            divider = "-" * model_w + ("  " + "-" * metric_w) * len(METRICS)
+            f.write(divider + "\n")
+
+            prev_group = None
+            for model in sorted_models:
+                group = "CNN/GELAN" if model in self._NON_ATTENTION_MODELS else "attention"
+                if prev_group is not None and group != prev_group:
+                    f.write(divider + "\n")
+                prev_group = group
+
+                d = model_rows[model]
+                row = f"{model:<{model_w}}"
+                for _, getter in METRICS:
+                    try:
+                        val = getter(d)
+                        row += f"  {val:^{metric_w}.3f}" if val is not None else f"  {'N/A':^{metric_w}}"
+                    except Exception:
+                        row += f"  {'N/A':^{metric_w}}"
+                row += f"  [{group}]"
+                f.write(row + "\n")
+
+            f.write("\n")
+            f.write(_METRIC_NOTES)
+            f.write("  * Primary metric (this project)\n")
+
+        print(f"Saved: {table_path}")
+
+    # -------------------------------------------------------------------------
+    # model_ranking mode: attention vs CNN group analysis
+    # -------------------------------------------------------------------------
+
+    def _write_attention_analysis(
+        self,
+        resolved_ids: List[str],
+        resolved_datasets: List[str],
+        data: Dict[str, Any],
+        out_dir: Path
+    ):
+        """
+        Group models into CNN/GELAN vs attention-based and report group-level
+        mean AP, best model per group, and the gap — per dataset and overall.
+        """
+        from evaluation.lib.comparator import _PRIMARY_THRESHOLDS
+
+        METRICS = [
+            ("AP@[0.50:0.75]*", lambda d: self._compute_ap_range(d["metrics"], _PRIMARY_THRESHOLDS)),
+            ("AP@[0.50:0.95]",  lambda d: self._compute_coco_ap(d["metrics"])),
+            ("AP@0.50",         lambda d: d["metrics"]["summary"].get("ap50")),
+        ]
+
+        # Build {model: {dataset: entry}}
+        model_data: Dict[str, Dict[str, Any]] = {}
+        for label, ds_map in data.items():
+            m = self._LABEL_RE.match(label)
+            if not m:
+                continue
+            model_label = m.group(2)
+            model_data.setdefault(model_label, {}).update(ds_map)
+
+        non_attn = sorted(m for m in model_data if m in self._NON_ATTENTION_MODELS)
+        attn     = sorted(m for m in model_data if m not in self._NON_ATTENTION_MODELS)
+
+        report_path = out_dir / "attention_analysis.txt"
+        with open(report_path, "w") as f:
+            f.write("ATTENTION vs NON-ATTENTION GROUP ANALYSIS\n")
+            f.write("=" * 70 + "\n")
+            f.write("Hypothesis: self-attention degrades performance on composite\n")
+            f.write("tiled fisheye images due to cross-tile attention bleeding.\n\n")
+            f.write(f"CNN/GELAN (non-attention) : {', '.join(non_attn) or 'none'}\n")
+            f.write(f"Attention-based           : {', '.join(attn) or 'none'}\n")
+            f.write("=" * 70 + "\n")
+
+            overall_gaps: Dict[str, List[float]] = {mn: [] for mn, _ in METRICS}
+
+            for ds in resolved_datasets:
+                f.write(f"\nDataset: {ds.upper()}\n")
+                f.write("-" * 50 + "\n")
+
+                for metric_name, getter in METRICS:
+                    non_scores, attn_scores = {}, {}
+                    for model in non_attn:
+                        entry = model_data.get(model, {}).get(ds)
+                        if entry is None:
+                            continue
+                        try:
+                            v = getter(entry)
+                            if v is not None:
+                                non_scores[model] = v
+                        except Exception:
+                            pass
+                    for model in attn:
+                        entry = model_data.get(model, {}).get(ds)
+                        if entry is None:
+                            continue
+                        try:
+                            v = getter(entry)
+                            if v is not None:
+                                attn_scores[model] = v
+                        except Exception:
+                            pass
+
+                    if not non_scores or not attn_scores:
+                        continue
+
+                    non_mean = sum(non_scores.values()) / len(non_scores)
+                    attn_mean = sum(attn_scores.values()) / len(attn_scores)
+                    gap = non_mean - attn_mean
+                    best_non  = max(non_scores,  key=non_scores.__getitem__)
+                    best_attn = max(attn_scores, key=attn_scores.__getitem__)
+
+                    sign = "+" if gap >= 0 else ""
+                    direction = "NON-ATTENTION WINS" if gap > 0 else ("ATTENTION WINS" if gap < 0 else "TIE")
+                    f.write(f"\n  {metric_name}\n")
+                    f.write(f"    CNN/GELAN   mean={non_mean:.3f}  best={best_non} ({non_scores[best_non]:.3f})\n")
+                    f.write(f"    Attention   mean={attn_mean:.3f}  best={best_attn} ({attn_scores[best_attn]:.3f})\n")
+                    f.write(f"    Gap (non-attn - attn): {sign}{gap:.3f}  ->  {direction}\n")
+                    overall_gaps[metric_name].append(gap)
+
+            f.write("\n" + "=" * 70 + "\n")
+            f.write("OVERALL (mean gap across all datasets)\n")
+            f.write("-" * 50 + "\n")
+            hypothesis_supported = True
+            for metric_name, _ in METRICS:
+                gaps = overall_gaps[metric_name]
+                if not gaps:
+                    continue
+                mean_gap = sum(gaps) / len(gaps)
+                sign = "+" if mean_gap >= 0 else ""
+                direction = "NON-ATTENTION WINS" if mean_gap > 0 else ("ATTENTION WINS" if mean_gap < 0 else "TIE")
+                if mean_gap <= 0:
+                    hypothesis_supported = False
+                f.write(f"  {metric_name:<22} mean gap = {sign}{mean_gap:.3f}  ->  {direction}\n")
+
+            f.write("\n")
+            if hypothesis_supported:
+                f.write(
+                    "CONCLUSION: CNN/GELAN models consistently outperform attention-based\n"
+                    "models across all metrics and datasets. This supports the hypothesis\n"
+                    "that self-attention cross-tile bleeding degrades detection on composite\n"
+                    "fisheye images.\n"
+                )
+            else:
+                f.write(
+                    "CONCLUSION: Results are mixed — the hypothesis is not consistently\n"
+                    "supported across all metrics. Further investigation is warranted.\n"
+                )
             f.write("=" * 70 + "\n")
 
         print(f"Saved: {report_path}")

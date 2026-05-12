@@ -61,6 +61,7 @@ def main():
     print(f"Datasets    : {datasets}")
     print(f"Results dir : {comparison_out_dir}")
     print(f"Figures     : {cmc.ENABLE_FIGURES}")
+    print(f"Mode        : {cmc.MODE}")
     print("=" * 70)
 
     comparator = CrossModelComparator(
@@ -70,6 +71,7 @@ def main():
         config_ids=config_ids,
         datasets=datasets,
         enable_figures=cmc.ENABLE_FIGURES,
+        mode=cmc.MODE,
     )
 
     comparator.run()
