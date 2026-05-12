@@ -31,7 +31,7 @@ datasets/all-datasets/
 ### Step 1: Extract Frames from Videos
 
 ```python
-from evaluation.config import get_cfg
+from evaluation.lib.config import get_cfg
 from datasets.bomni_manager import BOMNIManager
 
 cfg = get_cfg()
@@ -151,7 +151,7 @@ Create a file `datasets/prepare_bomni.py`:
 """
 Complete BOMNI dataset preparation workflow.
 """
-from evaluation.config import get_cfg
+from evaluation.lib.config import get_cfg
 from datasets.bomni_manager import BOMNIManager
 
 def main():
@@ -278,7 +278,7 @@ Note: Only a subset of frames have annotations (~10% of frames are annotated).
 
 ### Configuration
 
-The evaluation system uses **YACS** for configuration management. See `evaluation/config.py` for all configurable parameters.
+The evaluation system uses **YACS** for configuration management. See `evaluation/lib/config.py` for all configurable parameters.
 
 Key configuration nodes:
 - `DATASETS.BOMNI` - Dataset paths, sequences, image dimensions, fisheye center
@@ -291,7 +291,7 @@ Key configuration nodes:
 #### Loading the Dataset
 
 ```python
-from evaluation.config import get_cfg
+from evaluation.lib.config import get_cfg
 from evaluation.bomni_dataset import BOMNIDataset
 
 # Load configuration
@@ -390,7 +390,7 @@ DATASETS_TO_VISUALIZE = [
 ]
 ```
 
-Control visualization settings in `evaluation/config.py`:
+Control visualization settings in `evaluation/lib/config.py`:
 
 ```python
 # Visualize ALL images
@@ -762,5 +762,5 @@ Library (imported by other modules, in `lib/`):
 ### References
 
 1. Original BOMNI Dataset: [Boğaziçi University PI Lab](https://www.cmpe.boun.edu.tr/pilab/pilabfiles/databases/bomni/)
-2. Rotated Annotations: [omnidet-rotinv GitHub](https://github.com/your-path-here) (Tamura et al., WACV 2019)
+2. Rotated Annotations: [omnidet-rotinv GitHub](https://github.com/hitachi-rd-cv/omnidet-rotinv) (Tamura et al., WACV 2019)
 3. Paper: "Omnidirectional Pedestrian Detection by Rotation Invariant Training" (Tamura et al., 2019)
