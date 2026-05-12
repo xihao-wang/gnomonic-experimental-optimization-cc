@@ -1,1 +1,1 @@
-docs: update README to reflect current project state
+refactor: move process_video constants to config.py and fix CUDA auto-detect

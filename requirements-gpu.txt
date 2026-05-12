@@ -1,0 +1,6 @@
+-r requirements-base.txt
+
+# CUDA 12.8 torch — pulled from PyTorch index
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.7.0+cu128
+torchvision==0.22.0+cu128

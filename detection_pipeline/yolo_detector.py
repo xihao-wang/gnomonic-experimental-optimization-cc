@@ -47,7 +47,8 @@ class YOLODetector:
 
         # Auto-detect device if not specified
         if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            cuda_ready = torch.cuda.is_available() and torch.version.cuda is not None
+            self.device = "cuda" if cuda_ready else "cpu"
         else:
             self.device = device
 

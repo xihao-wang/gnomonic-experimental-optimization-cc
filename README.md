@@ -61,7 +61,16 @@ project-root/
 ```bash
 python -m venv venv
 venv\Scripts\activate      # Windows
-pip install ultralytics opencv-python numpy scikit-learn matplotlib yacs pillow
+```
+
+Then install dependencies based on your hardware:
+
+```bash
+# CPU only
+pip install -r requirements-cpu.txt
+
+# GPU (CUDA 12.8)
+pip install -r requirements-gpu.txt
 ```
 
 ### 2. Configure

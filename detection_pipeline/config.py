@@ -6,7 +6,10 @@ Configuration hierarchy:
   - INPUT: Fisheye image and preprocessing
   - PROJECTION: Composite image generation settings
   - YOLO: Detection model and inference parameters
+  - NMS: Two-stage non-maximum suppression
+  - BACKPROJECTION: Fisheye coordinate transformation
   - OUTPUT: Visualization and result storage
+  - VIDEO: Video processing parameters
 
 Usage:
     from detection_pipeline.config import get_cfg
@@ -37,8 +40,9 @@ _C.INPUT.IMAGE_PATH = "fisheye-sample.png"
 
 _C.PROJECTION = CN()
 
-# Preset to use for projection: "yolo_grid", "default", "high_coverage", "horizon", "wide_angle", "high_res"
-_C.PROJECTION.PRESET = "yolo_grid"
+# Preset to use: "yolo_grid", "default", "high_coverage", "horizon", "wide_angle", "high_res"
+# Set to None to use manual parameters below
+_C.PROJECTION.PRESET = None
 
 # Override preset's image path (None = use preset's default)
 _C.PROJECTION.CUSTOM_IMAGE = None
@@ -46,19 +50,19 @@ _C.PROJECTION.CUSTOM_IMAGE = None
 # ---- Manual configuration (used when PRESET is None) ----
 
 # Number of projections to generate
-_C.PROJECTION.PROJ_NBR = 9
+_C.PROJECTION.PROJ_NBR = 6
 
 # Field of view in degrees
 _C.PROJECTION.FOV_H = 60.0  # Horizontal
-_C.PROJECTION.FOV_V = 60.0  # Vertical
+_C.PROJECTION.FOV_V = 85.0  # Vertical
 
 # Camera positioning
 _C.PROJECTION.LATITUDE = 45.0  # 0=nadir (straight down), 90=horizon
-_C.PROJECTION.LON_0 = 0.0     # Starting longitude
-_C.PROJECTION.LON_STEP = 40.0 # Longitude step between projections
+_C.PROJECTION.LON_0 = 0.0
+_C.PROJECTION.LON_STEP = 60.0  # 360 / PROJ_NBR for uniform spacing
 
 # Grid layout: (rows, cols) or None for automatic
-_C.PROJECTION.GRID = None
+_C.PROJECTION.GRID = (2, 3)
 
 # Composite image size (width, height) - should match YOLO input size
 _C.PROJECTION.COMP_SIZE = (640, 640)
@@ -73,20 +77,15 @@ _C.PROJECTION.TARGET_MP = 'auto'
 
 _C.YOLO = CN()
 
-# YOLO model to use: path to .pt file in models/ folder at project root
-# Available: yolov8n.pt, yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt
-#            yolo11n.pt, yolo11s.pt, yolo12n.pt, yolo12s.pt, yolo12x.pt, etc.
-# Use relative path from project root
-_C.YOLO.MODEL = "models/yolo12x.pt"
+# YOLO model path (relative to project root)
+# Available models in models/: yolov8{n,s,m,l,x}.pt, yolov9{c,e}.pt,
+#                               yolo11{n,s}.pt, yolo12{n,s,x}.pt, etc.
+_C.YOLO.MODEL = "models/yolov9e.pt"
 
-# Device to run YOLO on: "cuda" or "cpu"
-# Set to None for auto-detection (GPU if available, else CPU)
+# Device: "cuda", "cpu", or None for auto-detection
 _C.YOLO.DEVICE = None
 
-# ---- Detection Parameters ----
-
-# Confidence threshold for person class detections (0-1)
-# Initial filter to remove very weak detections before NMS stages
+# Confidence threshold (pre-NMS filter — removes very weak detections)
 _C.YOLO.CONFIDENCE_THRESHOLD = 0.25
 
 # Maximum number of detections to keep per image
@@ -101,30 +100,23 @@ _C.NMS = CN()
 # ---- Stage 1: Standard NMS on Composite Image ----
 _C.NMS.STAGE1 = CN()
 
-# Enable/disable Stage 1 NMS (applied on composite detections before backprojection)
-# Note: YOLO always applies internal NMS, this controls the threshold
+# Applied on composite detections before backprojection
 _C.NMS.STAGE1.ENABLED = True
 
-# IoU threshold for standard NMS on composite image
-# High threshold (0.8) keeps more bboxes since Stage 2 NMS follows
+# High threshold keeps more boxes since Stage 2 NMS follows
 _C.NMS.STAGE1.IOU_THRESHOLD = 0.8
 
 # ---- Stage 2: Soft-NMS on Fisheye Image ----
 _C.NMS.STAGE2 = CN()
 
-# Enable/disable Stage 2 Soft-NMS (applied on fisheye detections after backprojection)
+# Applied on fisheye detections after backprojection
 _C.NMS.STAGE2.ENABLED = True
 
-# Sigma parameter for Gaussian Soft-NMS: score ← score * exp((-IoU²)/sigma)
-# Literature suggests: 0.1 (aggressive), 0.2 (moderate), 0.4 (gentle)
-# Lower values suppress overlapping boxes more aggressively
+# Gaussian decay: score ← score * exp((-IoU²) / sigma)
+# 0.1=aggressive suppression, 0.2=moderate, 0.4=gentle
 _C.NMS.STAGE2.SIGMA = 0.2
 
-# Score threshold for Soft-NMS (applied to decayed scores)
-# Detections with score below this threshold after Gaussian decay are discarded
-# Note: Scores are DECAYED by Soft-NMS, so threshold should be lower than initial confidence
-# Reasonable values: 0.2-0.4 (removes heavily penalized duplicates)
-# Suggested alternatives: 0.2, 0.3, 0.4, 0.5
+# Discard detections below this score after Gaussian decay
 _C.NMS.STAGE2.SCORE_THRESHOLD = 0.3
 
 # ============================================================================
@@ -133,70 +125,76 @@ _C.NMS.STAGE2.SCORE_THRESHOLD = 0.3
 
 _C.BACKPROJECTION = CN()
 
-# Enable backprojection of detections to fisheye coordinates
+# Map detections from composite to fisheye coordinates
 _C.BACKPROJECTION.ENABLED = True
 
-# Number of lattice points to sample along bbox height
-# Width samples are calculated automatically based on bbox aspect ratio
-# Higher values = more detailed distortion visualization (e.g., 10, 15, 20)
+# Lattice grid points along bbox height for distortion visualization
 _C.BACKPROJECTION.LATTICE_HEIGHT_SAMPLES = 10
 
 # ============================================================================
-# OUTPUT: Visualization and Results
+# OUTPUT: Visualization and Results (single-image pipeline)
 # ============================================================================
 
 _C.OUTPUT = CN()
 
-# Save intermediate composite image before YOLO
 _C.OUTPUT.SAVE_COMPOSITE = True
-
-# Save visualization of detections on composite image
 _C.OUTPUT.SAVE_COMPOSITE_VIZ = True
-
-# Save visualization of detections on original fisheye image (after backprojection)
 _C.OUTPUT.SAVE_FISHEYE_VIZ = True
-
-# Save lattice visualization for each backprojected bbox (shows distortion)
 _C.OUTPUT.SAVE_LATTICE_VIZ = True
-
-# Output directory for visualizations and results
 _C.OUTPUT.SAVE_DIR = "results"
 
 # ============================================================================
-# DEBUG / VERBOSE
+# VIDEO: Video Processing Parameters
 # ============================================================================
 
-_C.VERBOSE = False  # Print detailed pipeline information
+_C.VIDEO = CN()
+
+# Input video path (relative to project root)
+_C.VIDEO.INPUT_PATH = "detection_pipeline/videos/sandra_caplogy_gs.mp4"
+
+# Output directory (relative to project root)
+_C.VIDEO.OUTPUT_DIR = "detection_pipeline/results/video_demos"
+
+# Save composite video alongside the fisheye output
+_C.VIDEO.SAVE_COMPOSITE = True
+
+# Process every Nth frame (1 = all frames, 2 = every other frame, etc.)
+_C.VIDEO.PROCESS_EVERY_N_FRAMES = 1
+
+# Maximum frames to process (0 = all frames)
+_C.VIDEO.MAX_FRAMES = 0
+
+# Show real-time preview window (press Q to quit)
+_C.VIDEO.DISPLAY_FRAMES = True
+
+# Bounding box rendering
+_C.VIDEO.BBOX_COLOR = (0, 255, 0)  # BGR
+_C.VIDEO.BBOX_THICKNESS = 2
+_C.VIDEO.SHOW_LABELS = True
+_C.VIDEO.SHOW_CONFIDENCE = True
+
+# Print progress every 10 processed frames
+_C.VIDEO.VERBOSE = True
+
+# ============================================================================
+# DEBUG / VERBOSE (pipeline-level)
+# ============================================================================
+
+_C.VERBOSE = False
 
 
 # ============================================================================
-# Public API Functions
+# Public API
 # ============================================================================
 
 def get_cfg():
-    """
-    Get a copy of the default configuration.
-
-    Returns:
-        yacs.config.CfgNode: Configuration object
-    """
     return _C.clone()
 
 
 def get_cfg_as_dict(cfg):
-    """
-    Convert YACS config object to dictionary.
-
-    Args:
-        cfg: YACS config object
-
-    Returns:
-        dict: Configuration as dictionary
-    """
     return CN.to_py(cfg)
 
 
 if __name__ == "__main__":
-    """Print default configuration when run as script."""
     cfg = get_cfg()
     print(cfg)
