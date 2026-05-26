@@ -209,7 +209,7 @@ class DetectionPipeline:
             print(f"    Model: {self.cfg.YOLO.MODEL}")
             print(f"    Device: {self.detector.device}")
             print(f"    Confidence threshold: {self.cfg.YOLO.CONFIDENCE_THRESHOLD}")
-            print(f"    IoU threshold: {self.cfg.YOLO.IOU_THRESHOLD}")
+            print(f"    IoU threshold: {self.cfg.NMS.STAGE1.IOU_THRESHOLD}")
 
         # Wrap YOLO detection in timing if timer provided
         if timer is not None:
@@ -326,7 +326,24 @@ class DetectionPipeline:
                     'height': height,
                     'angle': bbox['angle'],
                     'confidence': bbox.get('confidence', 0.0),
-                    'class_name': bbox.get('class_name', 'person')
+                    'class_name': bbox.get('class_name', 'person'),
+                    'source_id': bbox.get('source_id'),
+                    'source_bbox_xyxy': bbox.get('source_bbox_xyxy'),
+                    'source_bbox_norm': bbox.get('source_bbox_norm'),
+                    'source_projection_id': bbox.get('source_projection_id'),
+                    'source_cell': bbox.get('source_cell'),
+                    'source_confidence': bbox.get('source_confidence'),
+                    'duplicate_source_ids': bbox.get('duplicate_source_ids', []),
+                    'duplicate_count': bbox.get('duplicate_count', 1),
+                    'reid_source_id': bbox.get('reid_source_id'),
+                    'reid_source_bbox_xyxy': bbox.get('reid_source_bbox_xyxy'),
+                    'reid_source_bbox_norm': bbox.get('reid_source_bbox_norm'),
+                    'reid_source_projection_id': bbox.get('reid_source_projection_id'),
+                    'reid_source_cell': bbox.get('reid_source_cell'),
+                    'reid_source_confidence': bbox.get('reid_source_confidence'),
+                    'reid_source_quality': bbox.get('reid_source_quality'),
+                    'tracking_bbox_xyxy': bbox.get('tracking_bbox_xyxy'),
+                    'tracking_bbox_tlwh': bbox.get('tracking_bbox_tlwh'),
                 })
 
             if return_visuals:

@@ -332,6 +332,27 @@ def process_video():
                 )
                 rbbox['confidence'] = b['confidence']
                 rbbox['class_name'] = b['class_name']
+                for key in (
+                    'source_id',
+                    'source_bbox_xyxy',
+                    'source_bbox_norm',
+                    'source_projection_id',
+                    'source_cell',
+                    'source_confidence',
+                    'duplicate_source_ids',
+                    'duplicate_count',
+                    'reid_source_id',
+                    'reid_source_bbox_xyxy',
+                    'reid_source_bbox_norm',
+                    'reid_source_projection_id',
+                    'reid_source_cell',
+                    'reid_source_confidence',
+                    'reid_source_quality',
+                    'tracking_bbox_xyxy',
+                    'tracking_bbox_tlwh',
+                ):
+                    if key in b:
+                        rbbox[key] = b[key]
                 fisheye_bboxes.append(rbbox)
 
             # ---- Run tracker -------------------------------------------

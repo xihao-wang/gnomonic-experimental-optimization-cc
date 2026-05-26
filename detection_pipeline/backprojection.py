@@ -350,8 +350,34 @@ def backproject_bbox(bbox: Dict, metadata: Dict,
     # Add detection metadata if available
     if 'confidence' in bbox:
         radial_bbox['confidence'] = bbox['confidence']
+        radial_bbox['source_confidence'] = bbox['confidence']
     if 'class_name' in bbox:
         radial_bbox['class_name'] = bbox['class_name']
+
+    source_id = bbox.get('source_id')
+    if source_id is not None:
+        radial_bbox['source_id'] = source_id
+
+    # Preserve the original composite/perspective detection for downstream ReID crops.
+    source_bbox_xyxy = bbox.get('source_bbox_xyxy')
+    if source_bbox_xyxy is None:
+        source_bbox_xyxy = [float(x1_comp), float(y1_comp), float(x2_comp), float(y2_comp)]
+    radial_bbox['source_bbox_xyxy'] = [float(v) for v in source_bbox_xyxy]
+    radial_bbox['source_bbox_norm'] = [float(x_norm), float(y_norm), float(w_norm), float(h_norm)]
+    radial_bbox['source_projection_id'] = int(cell_row * grid[1] + cell_col)
+    radial_bbox['source_cell'] = [int(cell_row), int(cell_col)]
+
+    cell_width = comp_width / grid[1]
+    cell_height = comp_height / grid[0]
+    cell_x0 = cell_col * cell_width
+    cell_y0 = cell_row * cell_height
+    radial_bbox['source_cell_bbox_xyxy'] = [
+        float(x1_comp - cell_x0),
+        float(y1_comp - cell_y0),
+        float(x2_comp - cell_x0),
+        float(y2_comp - cell_y0),
+    ]
+    radial_bbox['source_cell_size'] = [float(cell_width), float(cell_height)]
 
     return radial_bbox
 

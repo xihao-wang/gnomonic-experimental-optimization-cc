@@ -76,7 +76,10 @@ class YOLODetector:
                     'h': box height (0-1 normalized),
                     'confidence': detection confidence (0-1),
                     'class_id': class ID,
-                    'class_name': class name string
+                    'class_name': class name string,
+                    'source_id': detection index in the composite image,
+                    'source_bbox_xyxy': pixel-space composite bbox [x1, y1, x2, y2],
+                    'source_bbox_norm': normalized composite bbox [cx, cy, w, h]
                 }
         """
         # Normalize class_filter to list
@@ -109,7 +112,7 @@ class YOLODetector:
                 h, w = image.shape[:2]
 
                 # Process each detection
-                for box in result.boxes:
+                for det_idx, box in enumerate(result.boxes):
                     # Get confidence and class
                     confidence = float(box.conf[0].cpu().numpy())
                     class_id = int(box.cls[0].cpu().numpy())
@@ -129,10 +132,13 @@ class YOLODetector:
                     box_h = (y2 - y1) / h
 
                     detection = {
+                        'source_id': det_idx,
                         'x': center_x,
                         'y': center_y,
                         'w': box_w,
                         'h': box_h,
+                        'source_bbox_xyxy': [float(x1), float(y1), float(x2), float(y2)],
+                        'source_bbox_norm': [float(center_x), float(center_y), float(box_w), float(box_h)],
                         'confidence': confidence,
                         'class_id': class_id,
                         'class_name': class_name

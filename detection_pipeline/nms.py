@@ -134,6 +134,101 @@ def soft_nms_gaussian(detections: List[Dict], sigma: float = 0.2,
     return filtered
 
 
+def _axis_aligned_bbox_from_corners(bbox: Dict) -> Tuple[List[float], List[float]]:
+    """Return fisheye-space [x1, y1, x2, y2] and [x, y, w, h] boxes."""
+    corners = bbox.get('corners')
+    if corners is not None and len(corners) > 0:
+        pts = np.asarray(corners, dtype=float)
+        x1 = float(np.min(pts[:, 0]))
+        y1 = float(np.min(pts[:, 1]))
+        x2 = float(np.max(pts[:, 0]))
+        y2 = float(np.max(pts[:, 1]))
+    else:
+        cx, cy = bbox['center']
+        width, height = bbox['size']
+        x1 = float(cx - width / 2.0)
+        y1 = float(cy - height / 2.0)
+        x2 = float(cx + width / 2.0)
+        y2 = float(cy + height / 2.0)
+    return [x1, y1, x2, y2], [x1, y1, x2 - x1, y2 - y1]
+
+
+def compute_reid_source_quality(detection: Dict,
+                                boundary_threshold_ratio: float = 0.03) -> float:
+    """
+    Score how suitable a source composite bbox is for ReID feature extraction.
+
+    The first version is intentionally simple: prefer high-confidence, larger crops,
+    and penalize boxes close to a projection-cell boundary because they are likely
+    truncated by the gnomonic view.
+    """
+    conf = float(detection.get('source_confidence', detection.get('confidence', 0.0)))
+    cell_bbox = detection.get('source_cell_bbox_xyxy')
+    cell_size = detection.get('source_cell_size')
+
+    if cell_bbox is None or cell_size is None:
+        return conf
+
+    x1, y1, x2, y2 = [float(v) for v in cell_bbox]
+    cell_w, cell_h = [float(v) for v in cell_size]
+    if cell_w <= 0 or cell_h <= 0:
+        return conf
+
+    bbox_w = max(0.0, x2 - x1)
+    bbox_h = max(0.0, y2 - y1)
+    area_ratio = (bbox_w * bbox_h) / max(cell_w * cell_h, 1e-12)
+    area_score = min(1.0, float(np.sqrt(max(0.0, area_ratio))))
+
+    margin = min(x1, y1, cell_w - x2, cell_h - y2)
+    boundary_threshold = boundary_threshold_ratio * min(cell_w, cell_h)
+    boundary_penalty = 1.0 if margin < boundary_threshold else 0.0
+
+    return conf + area_score - boundary_penalty
+
+
+def attach_reid_source_groups(filtered_detections: List[Dict],
+                              original_detections: List[Dict],
+                              duplicate_iou_threshold: float = 0.5) -> List[Dict]:
+    """
+    Attach duplicate-group and best-source metadata to Stage 2 kept detections.
+
+    The kept fisheye bbox remains the representative detection. ReID should use the
+    best source crop selected from all original detections that overlap this kept
+    fisheye bbox in fisheye space.
+    """
+    enriched = []
+    for kept in filtered_detections:
+        group = []
+        kept_source_id = kept.get('source_id')
+        for candidate in original_detections:
+            same_source = kept_source_id is not None and candidate.get('source_id') == kept_source_id
+            overlaps = compute_rotated_iou(kept, candidate) >= duplicate_iou_threshold
+            if same_source or overlaps:
+                group.append(candidate)
+
+        if not group:
+            group = [kept]
+
+        best_source = max(group, key=compute_reid_source_quality)
+        out = kept.copy()
+        out['duplicate_source_ids'] = [g.get('source_id') for g in group if g.get('source_id') is not None]
+        out['duplicate_count'] = len(group)
+        out['reid_source_id'] = best_source.get('source_id')
+        out['reid_source_bbox_xyxy'] = best_source.get('source_bbox_xyxy')
+        out['reid_source_bbox_norm'] = best_source.get('source_bbox_norm')
+        out['reid_source_projection_id'] = best_source.get('source_projection_id')
+        out['reid_source_cell'] = best_source.get('source_cell')
+        out['reid_source_cell_bbox_xyxy'] = best_source.get('source_cell_bbox_xyxy')
+        out['reid_source_confidence'] = best_source.get(
+            'source_confidence', best_source.get('confidence', 0.0)
+        )
+        out['reid_source_quality'] = compute_reid_source_quality(best_source)
+        out['tracking_bbox_xyxy'], out['tracking_bbox_tlwh'] = _axis_aligned_bbox_from_corners(out)
+        enriched.append(out)
+
+    return enriched
+
+
 def apply_stage1_nms(detections: List[Dict], iou_threshold: float = 0.8) -> List[Dict]:
     """
     Apply Stage 1 standard NMS on composite image detections.
@@ -211,4 +306,6 @@ def apply_stage2_nms(fisheye_bboxes: List[Dict], sigma: float = 0.2,
     Returns:
         Filtered list of fisheye bboxes with updated confidence scores
     """
-    return soft_nms_gaussian(fisheye_bboxes, sigma, score_threshold)
+    original_bboxes = [bbox.copy() for bbox in fisheye_bboxes]
+    filtered = soft_nms_gaussian(fisheye_bboxes, sigma, score_threshold)
+    return attach_reid_source_groups(filtered, original_bboxes)
