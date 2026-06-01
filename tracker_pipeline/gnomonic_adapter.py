@@ -30,8 +30,8 @@ class GnomonicTrackerDetection:
         tlwh: Axis-aligned fisheye tracking bbox as ``[top_left_x, top_left_y,
             width, height]``. This is the box that should feed Kalman/tracking.
         confidence: Detection confidence used by the tracker.
-        feature: ReID embedding extracted from the selected perspective crop.
-        reid_source_bbox_xyxy: Composite-image crop used to compute ``feature``.
+        feature: ReID embedding extracted from the configured crop source.
+        reid_source_bbox_xyxy: Crop box used to compute ``feature``.
         metadata: Source-aware debug fields kept for inspection/logging.
     """
 
@@ -155,27 +155,34 @@ def _metadata_from_bbox(bbox: Dict) -> Dict:
 
 def build_tracker_detections(
     fisheye_bboxes: Iterable[Dict],
-    composite_image: np.ndarray,
+    reid_image: np.ndarray,
     feature_extractor: Optional[FeatureExtractor] = None,
     feature_dim: int = 0,
     require_features: bool = False,
     crop_pad: int = 0,
+    reid_source: str = "fisheye",
 ) -> List[GnomonicTrackerDetection]:
     """Convert source-aware fisheye bboxes into tracker-ready detections.
 
     Args:
         fisheye_bboxes: Output of ``DetectionPipeline.run(..., return_visuals=True)``.
-        composite_image: Perspective composite image from the same pipeline call.
-        feature_extractor: Optional callable ``(composite_image, crop_boxes_xyxy)``
-            returning an ``N x D`` feature matrix. This is where FastReID/BoT should
-            be plugged in later.
+        reid_image: Image used for ReID crops. In the current track-fisheye
+            experiment this is the fisheye frame; the legacy source-aware mode
+            can still pass the perspective composite image.
+        feature_extractor: Optional callable ``(reid_image, crop_boxes_xyxy)``
+            returning an ``N x D`` feature matrix.
         feature_dim: Placeholder feature dimension when no extractor is provided.
         require_features: If True, raise when no extractor is supplied.
         crop_pad: Pixel padding applied only for validating/cropping ReID boxes.
+        reid_source: ``"fisheye"`` to crop the final NMS fisheye bbox, or
+            ``"composite"`` to crop the selected source-aware perspective bbox.
 
     Returns:
         List of ``GnomonicTrackerDetection`` objects.
     """
+    if reid_source not in {"fisheye", "composite"}:
+        raise ValueError(f"Unsupported reid_source={reid_source!r}; expected 'fisheye' or 'composite'")
+
     boxes = list(fisheye_bboxes or [])
     if not boxes:
         return []
@@ -185,23 +192,27 @@ def build_tracker_detections(
     valid_reid_boxes: List[np.ndarray] = []
 
     for bbox in boxes:
-        tracking_tlwhs.append(_tracking_tlwh_from_bbox(bbox))
-        reid_box = _reid_source_xyxy_from_bbox(bbox)
+        tracking_tlwh = _tracking_tlwh_from_bbox(bbox)
+        tracking_tlwhs.append(tracking_tlwh)
+        if reid_source == "fisheye":
+            reid_box = tlwh_to_xyxy(tracking_tlwh)
+        else:
+            reid_box = _reid_source_xyxy_from_bbox(bbox)
         if reid_box is not None:
-            reid_box = clip_xyxy_to_image(reid_box, composite_image.shape)
+            reid_box = clip_xyxy_to_image(reid_box, reid_image.shape)
         reid_boxes.append(reid_box)
         valid_reid_boxes.append(reid_box if reid_box is not None else np.zeros(4, dtype=np.float32))
 
         # Touch the crop path here so invalid source boxes fail early in debug.
         if reid_box is not None and crop_pad:
-            crop_xyxy(composite_image, reid_box, pad=crop_pad)
+            crop_xyxy(reid_image, reid_box, pad=crop_pad)
 
     if feature_extractor is None:
         if require_features:
             raise ValueError("feature_extractor is required when require_features=True")
         features = np.zeros((len(boxes), int(feature_dim)), dtype=np.float32)
     else:
-        features = np.asarray(feature_extractor(composite_image, valid_reid_boxes), dtype=np.float32)
+        features = np.asarray(feature_extractor(reid_image, valid_reid_boxes), dtype=np.float32)
         if features.ndim != 2 or features.shape[0] != len(boxes):
             raise ValueError(
                 "feature_extractor must return an N x D matrix matching the number of detections; "
@@ -210,15 +221,17 @@ def build_tracker_detections(
 
     detections: List[GnomonicTrackerDetection] = []
     for idx, bbox in enumerate(boxes):
+        metadata = _metadata_from_bbox(bbox)
+        metadata["reid_crop_source"] = reid_source
+        metadata["reid_crop_bbox_xyxy"] = None if reid_boxes[idx] is None else reid_boxes[idx].tolist()
         detections.append(
             GnomonicTrackerDetection(
                 tlwh=np.asarray(tracking_tlwhs[idx], dtype=np.float32),
                 confidence=float(bbox.get("confidence", 0.0)),
                 feature=np.asarray(features[idx], dtype=np.float32),
                 reid_source_bbox_xyxy=reid_boxes[idx],
-                metadata=_metadata_from_bbox(bbox),
+                metadata=metadata,
             )
         )
 
     return detections
-

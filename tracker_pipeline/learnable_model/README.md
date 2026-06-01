@@ -16,3 +16,16 @@ python tracker_pipeline/process_video_strongsort.py \
   --learned-temporal \
   --fuse-learned-temporal
 ```
+
+
+database resource : https://sites.google.com/site/piropodatabase/
+
+
+## wepdtof_gt_l15_infonce_track_small
+training dataset : 
+tech_store
+jewelry_store
+jewelry_store_2
+
+Val:
+warehouse

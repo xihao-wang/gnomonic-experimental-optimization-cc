@@ -33,6 +33,12 @@ def main():
     parser.add_argument("--fastreid-weights", default="tracker_pipeline/reid/weights/duke_bot_S50.pth", help="FastReID model weights")
     parser.add_argument("--fastreid-device", default="cpu", choices=["cpu", "cuda"], help="FastReID inference device")
     parser.add_argument("--fastreid-batch-size", type=int, default=32, help="FastReID crop batch size")
+    parser.add_argument(
+        "--reid-crop-source",
+        choices=("fisheye", "composite"),
+        default="fisheye",
+        help="Use final fisheye NMS boxes or selected composite source boxes for ReID crops",
+    )
     args = parser.parse_args()
 
     cfg = get_cfg()
@@ -84,10 +90,11 @@ def main():
 
     tracker_detections = build_tracker_detections(
         fisheye_bboxes,
-        composite,
+        fisheye if args.reid_crop_source == "fisheye" else composite,
         feature_extractor=feature_extractor,
         feature_dim=args.feature_dim,
         require_features=args.use_fastreid,
+        reid_source=args.reid_crop_source,
     )
 
     print("Adapter frame check")
@@ -96,6 +103,7 @@ def main():
     print("final fisheye bboxes:", len(fisheye_bboxes or []))
     print("adapter detections:", len(tracker_detections))
     print("feature mode:", "FastReID" if args.use_fastreid else "placeholder")
+    print("reid crop source:", args.reid_crop_source)
 
     for idx, det in enumerate(tracker_detections):
         md = det.metadata
@@ -103,8 +111,10 @@ def main():
         print("  tracker tlwh:", det.tlwh.tolist())
         print("  confidence:", round(det.confidence, 4))
         print("  feature shape:", tuple(det.feature.shape))
-        print("  reid source id:", md.get("reid_source_id"))
-        print("  reid source bbox xyxy:", None if det.reid_source_bbox_xyxy is None else det.reid_source_bbox_xyxy.tolist())
+        print("  actual reid crop source:", md.get("reid_crop_source"))
+        print("  actual reid crop bbox xyxy:", md.get("reid_crop_bbox_xyxy"))
+        print("  selected composite source id:", md.get("reid_source_id"))
+        print("  selected composite source bbox xyxy:", md.get("reid_source_bbox_xyxy"))
         print("  duplicate source ids:", md.get("duplicate_source_ids"))
         print("  duplicate count:", md.get("duplicate_count"))
         print("  reid source quality:", md.get("reid_source_quality"))

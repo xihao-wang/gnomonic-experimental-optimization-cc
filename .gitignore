@@ -43,6 +43,7 @@ env/
 # Data (too large to version control)
 datasets/data/
 datasets/all-datasets/
+tracker_pipeline/data/
 results/
 detection_pipeline/results/
 *.npy

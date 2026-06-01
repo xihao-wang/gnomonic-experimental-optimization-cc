@@ -202,6 +202,33 @@ def _write_tracks_csv(path: Path, frame_idx: int, tracker: Tracker) -> None:
             ])
 
 
+def _write_mot_result_txt(path: Path, frame_idx: int, tracker: Tracker) -> None:
+    """Append confirmed tracks in MOTChallenge result format.
+
+    Format:
+        frame, id, x, y, w, h, conf, -1, -1, -1
+    """
+    with path.open("a", newline="") as f:
+        writer = csv.writer(f)
+        for track in tracker.tracks:
+            if not track.is_confirmed() or track.time_since_update > 1:
+                continue
+            x, y, w, h = [float(v) for v in track.to_tlwh()]
+            conf = 1.0 if track.match_confidence is None else float(track.match_confidence)
+            writer.writerow([
+                frame_idx,
+                int(track.track_id),
+                f"{x:.3f}",
+                f"{y:.3f}",
+                f"{w:.3f}",
+                f"{h:.3f}",
+                f"{conf:.6f}",
+                -1,
+                -1,
+                -1,
+            ])
+
+
 def _transcode_h264(input_video: Path, output_video: Path) -> bool:
     """Create a broadly compatible H.264 MP4 copy with ffmpeg if available."""
     if shutil.which("ffmpeg") is None:
@@ -263,6 +290,7 @@ def run(args: argparse.Namespace) -> Path:
 
     output_dir = _make_output_dir(_resolve(args.output_dir), input_path)
     tracks_csv = output_dir / "tracks.csv"
+    mot_result_txt = output_dir / "result.txt"
     video_out_path = output_dir / "tracked_fisheye.mp4"
 
     det_cfg = _build_detection_cfg(args)
@@ -373,10 +401,11 @@ def run(args: argparse.Namespace) -> Path:
         )
         adapter_dets = build_tracker_detections(
             fisheye_bboxes,
-            composite_image,
+            frame if args.reid_crop_source == "fisheye" else composite_image,
             feature_extractor=extractor,
             require_features=True,
             crop_pad=args.reid_crop_pad,
+            reid_source=args.reid_crop_source,
         )
         detections = _make_strongsort_detections(adapter_dets)
 
@@ -387,6 +416,7 @@ def run(args: argparse.Namespace) -> Path:
         _draw_tracks(vis, tracker, trail_history, args.trail_length)
         writer.write(vis)
         _write_tracks_csv(tracks_csv, frame_idx, tracker)
+        _write_mot_result_txt(mot_result_txt, frame_idx, tracker)
 
         processed += 1
         if args.log_every and processed % args.log_every == 0:
@@ -417,12 +447,14 @@ def run(args: argparse.Namespace) -> Path:
         f.write(f"output_video={video_out_path}\n")
         f.write(f"output_video_h264={h264_video_path if h264_created else ''}\n")
         f.write(f"tracks_csv={tracks_csv}\n")
+        f.write(f"mot_result_txt={mot_result_txt}\n")
         f.write(f"processed_frames={processed}\n")
         f.write(f"projection_preset={args.preset}\n")
         f.write(f"yolo_model={_resolve(args.yolo_model)}\n")
         f.write(f"fastreid_root={_resolve(args.fastreid_root)}\n")
         f.write(f"fastreid_config={_resolve(args.fastreid_config)}\n")
         f.write(f"fastreid_weights={_resolve(args.fastreid_weights)}\n")
+        f.write(f"reid_crop_source={args.reid_crop_source}\n")
         f.write(f"ltm_stm={args.ltm_stm}\n")
         f.write(f"memory_aware={args.memory_aware}\n")
         f.write(f"topk={args.topk}\n")
@@ -457,7 +489,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--comp-height", type=int, default=640)
     parser.add_argument("--target-mp", default="auto")
 
-    parser.add_argument("--yolo-model", default="detection_pipeline/models/yolov8n.pt")
+    parser.add_argument("--yolo-model", default="detection_pipeline/models/yolov9e.pt")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--confidence", type=float, default=0.25)
     parser.add_argument("--disable-stage1-nms", action="store_true")
@@ -472,6 +504,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fastreid-device", default="cpu")
     parser.add_argument("--fastreid-batch-size", type=int, default=32)
     parser.add_argument("--reid-crop-pad", type=int, default=0)
+    parser.add_argument(
+        "--reid-crop-source",
+        choices=("fisheye", "composite"),
+        default="fisheye",
+        help="Image source for ReID crops. 'fisheye' tracks directly after fisheye NMS; 'composite' uses the selected perspective source crop.",
+    )
 
     parser.add_argument("--matching-threshold", type=float, default=0.2)
     parser.add_argument("--max-iou-distance", type=float, default=0.7)
