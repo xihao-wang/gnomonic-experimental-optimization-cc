@@ -23,14 +23,28 @@ if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
 
 # Standard Python imports from image_composer
-from image_composer.multi_persp import generate_composite_from_config
+from image_composer.multi_persp import (
+    generate_composite_from_config,
+    draw_fov_on_fisheye,
+    generate_rainbow_colors,
+)
 from image_composer.presets import get_preset  # presets.py imports from multi_persp
 
 # Standard Python imports from detection_pipeline modules
 from detection_pipeline.config import get_cfg, get_cfg_as_dict
 from detection_pipeline.yolo_detector import YOLODetector
-from detection_pipeline.backprojection import backproject_detections, visualize_backprojection, visualize_bbox_lattice
+from detection_pipeline.backprojection import (
+    backproject_detections, visualize_backprojection, visualize_bbox_lattice,
+    draw_rotated_bbox,
+)
 from detection_pipeline.nms import apply_stage1_nms, apply_stage2_nms
+from detection_pipeline.redundant_bbox_filter import (
+    build_active_borders,
+    flag_border_aligned_candidates,
+    drop_confirmed_redundant_bboxes,
+    visualize_composite_flags,
+    visualize_detections_on_grid,
+)
 
 
 class DetectionPipeline:
@@ -209,7 +223,7 @@ class DetectionPipeline:
             print(f"    Model: {self.cfg.YOLO.MODEL}")
             print(f"    Device: {self.detector.device}")
             print(f"    Confidence threshold: {self.cfg.YOLO.CONFIDENCE_THRESHOLD}")
-            print(f"    IoU threshold: {self.cfg.NMS.STAGE1.IOU_THRESHOLD}")
+            print(f"    IoU threshold: {self.cfg.YOLO.IOU_THRESHOLD}")
 
         # Wrap YOLO detection in timing if timer provided
         if timer is not None:
@@ -227,8 +241,85 @@ class DetectionPipeline:
                 print(f"      [{i}] {det['class_name']} at ({det['x']:.3f}, {det['y']:.3f}), "
                       f"conf={det['confidence']:.3f}")
 
+        # Step 3b: Redundant-bbox filter — Stage 1 (composite-side flagging).
+        # Tags border-aligned detections. When Stage 2 (confirmation) is
+        # disabled, flagged detections are dropped HERE immediately, before
+        # backprojection. This ordering matters:
+        #
+        # The drop MUST happen before Stage-2 Soft-NMS, never after. Soft-NMS
+        # sorts by confidence and decays the score of lower-confidence
+        # overlapping boxes. If the flagged duplicate happened to have a
+        # higher YOLO confidence than the legitimate full-view detection,
+        # Soft-NMS would decay the legitimate one below SCORE_THRESHOLD and
+        # discard it. A drop-after-Soft-NMS step would then delete the
+        # flagged box too — leaving the target with no detection at all
+        # (false negative). Dropping before Soft-NMS sidesteps this: the
+        # legitimate full-view box enters Soft-NMS without any flagged
+        # competitor to bleed its score.
+        rb_cfg = self.cfg.REDUNDANT_BBOX_FILTER.BORDER_BASED
+        rb_flag_cfg = rb_cfg.FLAGGING
+        rb_conf_cfg = rb_cfg.CONFIRMATION
+        detections_raw = detections  # snapshot for visualization
+        detections_post_flag = None  # set below when rb_active; full list with flag tags
+        rb_active = rb_flag_cfg.ENABLED and len(detections) > 0
+        dropped_immediate_composite = []
+        if rb_active:
+            grid_tuple = tuple(proj_cfg["grid"])
+            has_extra = bool(proj_cfg.get("extra_projections"))
+            active_borders = build_active_borders(
+                grid=grid_tuple,
+                preset=rb_flag_cfg.PRESET,
+                overrides=rb_flag_cfg.OVERRIDES,
+                has_extra_projections=has_extra,
+            )
+            detections = flag_border_aligned_candidates(
+                detections=detections,
+                composite_shape=composite_image.shape,
+                grid=grid_tuple,
+                active_borders=active_borders,
+                tolerance_px=rb_flag_cfg.TOLERANCE_PX,
+            )
+            flagged_count = sum(1 for d in detections if "_flagged_border_side" in d)
+            if self.cfg.VERBOSE and not metrics_mode:
+                drop_mode = ("deferred to Stage-2 confirmation (post-backprojection, pre-Soft-NMS)"
+                             if rb_conf_cfg.ENABLED
+                             else "immediate on composite (pre-backprojection)")
+                print(f"    Redundant-bbox filter — Stage 1 flagging "
+                      f"(preset='{rb_flag_cfg.PRESET}'): "
+                      f"{flagged_count}/{len(detections)} detections flagged "
+                      f"(drop mode: {drop_mode})")
+                for d in detections:
+                    if "_flagged_border_side" in d:
+                        print(f"      FLAG tile={d['_flagged_tile']} side={d['_flagged_border_side']} "
+                              f"at ({d['x']:.3f}, {d['y']:.3f}), conf={d['confidence']:.3f}")
+
+            # Snapshot of post-flag, pre-drop detections — used by the
+            # composite visualization so the flagged-but-dropped boxes can
+            # still be rendered for inspection even when they're about to be
+            # removed below.
+            detections_post_flag = list(detections)
+
+            # If Stage 2 confirmation is OFF: drop flagged here on composite
+            # right away. Backprojection and Soft-NMS will only see the
+            # survivors, eliminating the false-negative risk described above.
+            if not rb_conf_cfg.ENABLED:
+                kept_composite = []
+                for d in detections:
+                    if "_flagged_border_side" in d:
+                        d2 = dict(d)
+                        d2["_drop_reason"] = "border_based_unconditional"
+                        dropped_immediate_composite.append(d2)
+                    else:
+                        kept_composite.append(d)
+                detections = kept_composite
+                if self.cfg.VERBOSE and not metrics_mode:
+                    print(f"    Redundant-bbox filter — composite drop (Stage 2 disabled): "
+                          f"removed {len(dropped_immediate_composite)} flagged on composite, "
+                          f"{len(detections)} survivors will be backprojected.")
+
         # Step 4: Backproject to fisheye coordinates (always enabled in metrics mode)
         fisheye_bboxes = None
+        fisheye_dropped_confirmed = []  # populated by the confirmation pass below
         should_backproject = metrics_mode or (self.cfg.BACKPROJECTION.ENABLED and len(detections) > 0)
 
         if should_backproject and len(detections) > 0:
@@ -268,6 +359,27 @@ class DetectionPipeline:
                         num_lattice = len(bbox.get('lattice_points', []))
                         print(f"      [{i}] {bbox['class_name']} at center ({bbox['center'][0]:.1f}, {bbox['center'][1]:.1f}), "
                               f"angle={bbox['angle']:.1f}°, conf={bbox.get('confidence', 0):.3f}, lattice: {num_lattice} points")
+
+                # Step 4a: Redundant-bbox filter — Stage 2 (confirmation).
+                # Runs BEFORE Soft-NMS so the flagged duplicates can't decay
+                # the legitimate full-view box's score (see explanation in
+                # Step 3b). Only relevant when confirmation is enabled; the
+                # "Stage 2 disabled" case already dropped on composite.
+                fisheye_dropped_confirmed = []
+                if rb_active and rb_conf_cfg.ENABLED and len(fisheye_bboxes) > 0:
+                    n_before_conf = len(fisheye_bboxes)
+                    kept_confirmed, fisheye_dropped_confirmed = drop_confirmed_redundant_bboxes(
+                        fisheye_bboxes,
+                        min_area_ratio_to_larger=rb_conf_cfg.MIN_AREA_RATIO_TO_LARGER,
+                        min_overlap_ios=rb_conf_cfg.MIN_OVERLAP_IOS,
+                    )
+                    fisheye_bboxes = kept_confirmed
+                    if self.cfg.VERBOSE and not metrics_mode:
+                        print(f"    Redundant-bbox filter — Stage 2 confirmation "
+                              f"(area_ratio>={rb_conf_cfg.MIN_AREA_RATIO_TO_LARGER}, "
+                              f"IoS>={rb_conf_cfg.MIN_OVERLAP_IOS}): "
+                              f"{n_before_conf} → {len(fisheye_bboxes)} "
+                              f"({len(fisheye_dropped_confirmed)} flagged & confirmed-dropped)")
 
                 # Apply Stage 2 Soft-NMS if enabled
                 if self.cfg.NMS.STAGE2.ENABLED and len(fisheye_bboxes) > 0:
@@ -326,24 +438,7 @@ class DetectionPipeline:
                     'height': height,
                     'angle': bbox['angle'],
                     'confidence': bbox.get('confidence', 0.0),
-                    'class_name': bbox.get('class_name', 'person'),
-                    'source_id': bbox.get('source_id'),
-                    'source_bbox_xyxy': bbox.get('source_bbox_xyxy'),
-                    'source_bbox_norm': bbox.get('source_bbox_norm'),
-                    'source_projection_id': bbox.get('source_projection_id'),
-                    'source_cell': bbox.get('source_cell'),
-                    'source_confidence': bbox.get('source_confidence'),
-                    'duplicate_source_ids': bbox.get('duplicate_source_ids', []),
-                    'duplicate_count': bbox.get('duplicate_count', 1),
-                    'reid_source_id': bbox.get('reid_source_id'),
-                    'reid_source_bbox_xyxy': bbox.get('reid_source_bbox_xyxy'),
-                    'reid_source_bbox_norm': bbox.get('reid_source_bbox_norm'),
-                    'reid_source_projection_id': bbox.get('reid_source_projection_id'),
-                    'reid_source_cell': bbox.get('reid_source_cell'),
-                    'reid_source_confidence': bbox.get('reid_source_confidence'),
-                    'reid_source_quality': bbox.get('reid_source_quality'),
-                    'tracking_bbox_xyxy': bbox.get('tracking_bbox_xyxy'),
-                    'tracking_bbox_tlwh': bbox.get('tracking_bbox_tlwh'),
+                    'class_name': bbox.get('class_name', 'person')
                 })
 
             if return_visuals:
@@ -351,7 +446,12 @@ class DetectionPipeline:
             return converted_bboxes
         else:
             # Normal mode: save results and return full output
-            results_dir = self._save_results(proj_cfg, composite_image, detections, metadata, fisheye_bboxes)
+            results_dir = self._save_results(
+                proj_cfg, composite_image, detections, metadata, fisheye_bboxes,
+                detections_raw=detections_raw,
+                detections_post_flag=detections_post_flag,
+                fisheye_dropped_confirmed=fisheye_dropped_confirmed,
+            )
 
             if self.cfg.VERBOSE:
                 print("=" * 80)
@@ -365,7 +465,9 @@ class DetectionPipeline:
 
             return detections, composite_image, metadata, results_dir, fisheye_bboxes
 
-    def _save_results(self, proj_cfg, composite_image, detections, metadata, fisheye_bboxes=None):
+    def _save_results(self, proj_cfg, composite_image, detections, metadata, fisheye_bboxes=None,
+                      detections_raw=None, detections_post_flag=None,
+                      fisheye_dropped_confirmed=None):
         """
         Save detection results to organized directory structure.
 
@@ -426,6 +528,31 @@ class DetectionPipeline:
         detections_out = results_dir / "detections.png"
         cv2.imwrite(str(detections_out), viz_image)
 
+        # Step 3b: Per-stage visualizations for the redundant-bbox filter
+        # (border-based, two-stage). Only produced when filter is enabled and
+        # SAVE_STAGE_VISUALS is on.
+        rb_cfg = self.cfg.REDUNDANT_BBOX_FILTER.BORDER_BASED
+        if rb_cfg.FLAGGING.ENABLED and rb_cfg.SAVE_STAGE_VISUALS and detections_raw is not None:
+            grid_tuple = tuple(proj_cfg["grid"])
+
+            # Composite: raw YOLO output (already post YOLO-internal Stage-1 NMS).
+            raw_viz = visualize_detections_on_grid(
+                composite_image, detections_raw, grid_tuple, color=(255, 255, 255)
+            )
+            cv2.imwrite(str(results_dir / "composite_01_yolo_post_stage1_nms.png"), raw_viz)
+
+            # Composite: same detections but flagged ones highlighted (orange
+            # bbox with magenta side, unflagged in green). Uses the post-flag
+            # snapshot so flagged-but-dropped boxes are still visible here,
+            # even when Stage 2 is disabled and the drop already happened on
+            # composite.
+            viz_input = detections_post_flag if detections_post_flag is not None else detections
+            flag_viz = visualize_composite_flags(
+                composite_image, viz_input, grid_tuple
+            )
+            cv2.imwrite(str(results_dir / "composite_02_flagged_for_review.png"),
+                        flag_viz)
+
         # Step 4: Save metadata to text file
         metadata_out = results_dir / "metadata.txt"
         with open(str(metadata_out), 'w') as f:
@@ -477,6 +604,46 @@ class DetectionPipeline:
                 fisheye_viz = visualize_backprojection(fisheye_img, fisheye_bboxes)
                 fisheye_viz_out = results_dir / "fisheye_detections.png"
                 cv2.imwrite(str(fisheye_viz_out), fisheye_viz)
+
+                # Optional overlay: each projection's FOV outline in a unique colour.
+                if self.cfg.OUTPUT.SAVE_FISHEYE_PROJ_BORDERS and metadata.get("proj_list"):
+                    h, w = fisheye_img.shape[:2]
+                    cx, cy = w // 2, h // 2
+                    r = min(cx, cy)
+                    proj_list = metadata["proj_list"]
+                    colors = generate_rainbow_colors(len(proj_list))
+                    viz_with_borders = fisheye_viz.copy()
+                    for proj_params, color in zip(proj_list, colors):
+                        viz_with_borders = draw_fov_on_fisheye(
+                            viz_with_borders, cx, cy, r,
+                            proj_params["longitude"], proj_params["latitude"],
+                            proj_params["fov_h"], proj_params["fov_v"],
+                            color=color,
+                            thickness=self.cfg.OUTPUT.PROJ_BORDERS_THICKNESS,
+                        )
+                    proj_borders_out = results_dir / "fisheye_detections_with_proj_borders.png"
+                    cv2.imwrite(str(proj_borders_out), viz_with_borders)
+                    if self.cfg.VERBOSE:
+                        print(f"    Fisheye with proj borders: {proj_borders_out}")
+
+                # Optional: fisheye view showing redundant-bbox confirmation
+                # result — kept boxes in blue, confirmation-dropped in red.
+                if (rb_cfg.FLAGGING.ENABLED and rb_cfg.SAVE_STAGE_VISUALS and
+                        fisheye_dropped_confirmed is not None and
+                        len(fisheye_dropped_confirmed) > 0):
+                    confirm_viz = fisheye_img.copy()
+                    for bb in fisheye_bboxes:
+                        draw_rotated_bbox(confirm_viz, bb, color=(255, 0, 0), thickness=2,
+                                          draw_label=False)
+                    for bb in fisheye_dropped_confirmed:
+                        draw_rotated_bbox(confirm_viz, bb, color=(0, 0, 255), thickness=2,
+                                          draw_label=False)
+                    confirm_out = results_dir / "fisheye_03_confirmation_drops.png"
+                    cv2.imwrite(str(confirm_out), confirm_viz)
+                    if self.cfg.VERBOSE:
+                        print(f"    Fisheye confirmation drops: {confirm_out} "
+                              f"({len(fisheye_dropped_confirmed)} dropped, "
+                              f"{len(fisheye_bboxes)} kept)")
 
                 # Save individual lattice visualization for each bbox (if enabled)
                 if self.cfg.VERBOSE:

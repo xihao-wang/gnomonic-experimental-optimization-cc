@@ -181,7 +181,7 @@ def fisheye_to_perspective(fisheye_img, cx, cy, r, longitude, latitude, fov_h_de
     return viewport, latency, (map_x, map_y)
 
 
-def draw_fov_on_fisheye(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg, color=(0, 255, 0)):
+def draw_fov_on_fisheye(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, fov_v_deg, color=(0, 255, 0), thickness=2):
     """
     Draw the field of view projection area on the original fisheye image.
     Handles cases where FOV extends beyond fisheye boundary.
@@ -316,7 +316,7 @@ def draw_fov_on_fisheye(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, 
             # Draw line segments
             for i in range(len(edge_x) - 1):
                 cv2.line(viz_img, (edge_x[i], edge_y[i]),
-                         (edge_x[i + 1], edge_y[i + 1]), color, 2)
+                         (edge_x[i + 1], edge_y[i + 1]), color, thickness)
 
         elif start_valid or end_valid:
             # Only one endpoint is valid - find intersection with fisheye boundary
@@ -330,7 +330,7 @@ def draw_fov_on_fisheye(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, 
                 # Find intersection
                 intersection = find_intersection(start_world, end_world)
                 if intersection:
-                    cv2.line(viz_img, (x_start, y_start), intersection, color, 2)
+                    cv2.line(viz_img, (x_start, y_start), intersection, color, thickness)
             else:
                 # Convert valid point to image coordinates
                 theta_end = np.arccos(-end_world[2])
@@ -341,7 +341,7 @@ def draw_fov_on_fisheye(fisheye_img, cx, cy, r, longitude, latitude, fov_h_deg, 
                 # Find intersection
                 intersection = find_intersection(end_world, start_world)
                 if intersection:
-                    cv2.line(viz_img, (x_end, y_end), intersection, color, 2)
+                    cv2.line(viz_img, (x_end, y_end), intersection, color, thickness)
 
         # If both endpoints are invalid, we don't draw anything
         # (the edge is completely outside the fisheye view)

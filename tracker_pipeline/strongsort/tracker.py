@@ -1,5 +1,6 @@
 # vim: expandtab:ts=4:sw=4
 from __future__ import absolute_import
+import json
 import numpy as np
 import torch
 from . import kalman_filter
@@ -39,7 +40,8 @@ class Tracker:
     def __init__(self, metric, max_iou_distance=0.7, max_age=100, n_init=10,
                  temporal_model=None, temporal_alpha=1.0,
                  fuse_temporal_model=False, temporal_max_correction=0.02,
-                 temporal_min_scale=0.02):
+                 temporal_min_scale=0.02, temporal_veto_cost=0.8,
+                 matching_debug_jsonl=None):
         self.metric = metric
         self.max_iou_distance = max_iou_distance
         self.max_age = max_age
@@ -49,15 +51,17 @@ class Tracker:
         self.fuse_temporal_model = bool(fuse_temporal_model)
         self.temporal_max_correction = float(temporal_max_correction)
         self.temporal_min_scale = float(temporal_min_scale)
+        self.temporal_veto_cost = float(temporal_veto_cost)
 
         self.tracks = []
-        self.inactive_tracks = []
         self._next_id = 1
         self.last_ambiguous_tracks = []
         self.last_ambiguous_info = {}
         self.last_match_confidences = {}
-        self.last_reactivation_info = []
         self.temporal_cost_override = None
+        self.matching_debug_jsonl = matching_debug_jsonl
+        self.matching_debug_frame = None
+        self._matching_debug_call_index = 0
 
     def set_temporal_cost_override(self, track_indices, detection_indices, temporal_cost):
         self.temporal_cost_override = {
@@ -90,240 +94,6 @@ class Tracker:
             k = min(opt.k, len(distances))
             return float(np.mean(np.sort(distances)[:k]))
         return float(np.min(distances))
-
-    def _inactive_reactivation_distance(self, track, detection):
-        feature = np.asarray(detection.feature, dtype=np.float32)
-        distances = []
-        d_short = self._cosine_distance_to_bank(feature, getattr(track, "short_memory", []))
-        d_long = self._cosine_distance_to_bank(feature, getattr(track, "long_memory", []))
-        if d_short is not None and d_long is not None:
-            distances.append(
-                opt.short_distance_weight * d_short
-                + (1.0 - opt.short_distance_weight) * d_long
-            )
-        elif d_short is not None:
-            distances.append(d_short)
-        elif d_long is not None:
-            distances.append(d_long)
-
-        for ref in (
-            getattr(track, "prototype", None),
-            getattr(track, "prot_short", None),
-            getattr(track, "prot_long", None),
-        ):
-            if ref is not None:
-                d_ref = self._cosine_distance_to_bank(feature, [ref])
-                if d_ref is not None:
-                    distances.append(d_ref)
-
-        if not distances:
-            return 1.0
-        return float(min(distances))
-
-    def _archive_track(self, track):
-        if not opt.enable_inactive_reactivation:
-            return
-        if track.hits < self.n_init:
-            return
-        self.inactive_tracks = [
-            t for t in self.inactive_tracks if t.track_id != track.track_id
-        ]
-        track.inactive_age = 0
-        self.inactive_tracks.append(track)
-        max_tracks = max(0, int(opt.inactive_max_tracks))
-        if max_tracks > 0 and len(self.inactive_tracks) > max_tracks:
-            self.inactive_tracks = self.inactive_tracks[-max_tracks:]
-
-    def _prune_inactive_tracks(self):
-        if not opt.enable_inactive_reactivation:
-            self.inactive_tracks = []
-            return
-        max_age = max(0, int(opt.inactive_max_age))
-        if max_age <= 0:
-            self.inactive_tracks = []
-            return
-        kept = []
-        active_ids = {track.track_id for track in self.tracks}
-        for track in self.inactive_tracks:
-            track.inactive_age = getattr(track, "inactive_age", 0) + 1
-            if track.track_id in active_ids:
-                continue
-            if track.inactive_age <= max_age:
-                kept.append(track)
-        self.inactive_tracks = kept
-
-    def _reactivate_inactive_tracks(
-            self, detections, unmatched_detections, excluded_track_ids=None):
-        self.last_reactivation_info = []
-        if not opt.enable_inactive_reactivation:
-            return unmatched_detections
-        if len(self.inactive_tracks) == 0 or len(unmatched_detections) == 0:
-            return unmatched_detections
-        excluded_track_ids = set(excluded_track_ids or [])
-        candidate_inactive_tracks = [
-            track for track in self.inactive_tracks
-            if track.track_id not in excluded_track_ids
-        ]
-        if len(candidate_inactive_tracks) == 0:
-            return unmatched_detections
-
-        cost_matrix = np.zeros(
-            (len(candidate_inactive_tracks), len(unmatched_detections)),
-            dtype=np.float32,
-        )
-        for row, track in enumerate(candidate_inactive_tracks):
-            for col, detection_idx in enumerate(unmatched_detections):
-                cost_matrix[row, col] = self._inactive_reactivation_distance(
-                    track, detections[detection_idx]
-                )
-        learned_prob_matrix = self._reactivation_learned_prob_matrix(
-            candidate_inactive_tracks, detections, unmatched_detections
-        )
-
-        threshold = float(opt.inactive_reactivation_threshold)
-        margin = float(opt.inactive_reactivation_margin)
-        assignment_cost = cost_matrix.copy()
-        assignment_cost[assignment_cost > threshold] = threshold + 1e-5
-        indices = linear_assignment.linear_assignment(assignment_cost)
-
-        reactivated_rows = set()
-        reactivated_detections = set()
-        for row, col in indices:
-            distance = float(cost_matrix[row, col])
-            learned_prob = (
-                None if learned_prob_matrix is None
-                else float(learned_prob_matrix[row, col])
-            )
-            if distance > threshold:
-                self.last_reactivation_info.append({
-                    "track_id": int(candidate_inactive_tracks[row].track_id),
-                    "detection_idx": int(unmatched_detections[col]),
-                    "distance": distance,
-                    "learned_prob": learned_prob,
-                    "accepted": False,
-                    "reason": "baseline_threshold",
-                })
-                continue
-
-            det_alternatives = np.delete(cost_matrix[:, col], row)
-            track_alternatives = np.delete(cost_matrix[row, :], col)
-            det_margin = (
-                float(np.min(det_alternatives)) - distance
-                if det_alternatives.size > 0 else float("inf")
-            )
-            track_margin = (
-                float(np.min(track_alternatives)) - distance
-                if track_alternatives.size > 0 else float("inf")
-            )
-            if det_margin < margin or track_margin < margin:
-                self.last_reactivation_info.append({
-                    "track_id": int(candidate_inactive_tracks[row].track_id),
-                    "detection_idx": int(unmatched_detections[col]),
-                    "distance": distance,
-                    "learned_prob": learned_prob,
-                    "accepted": False,
-                    "reason": "baseline_margin",
-                })
-                continue
-
-            if (
-                learned_prob is not None
-                and learned_prob < float(opt.inactive_reactivation_learned_min_prob)
-            ):
-                self.last_reactivation_info.append({
-                    "track_id": int(candidate_inactive_tracks[row].track_id),
-                    "detection_idx": int(unmatched_detections[col]),
-                    "distance": distance,
-                    "learned_prob": learned_prob,
-                    "accepted": False,
-                    "reason": "learned_veto",
-                })
-                continue
-
-            track = candidate_inactive_tracks[row]
-            detection_idx = unmatched_detections[col]
-            track.reactivate(
-                detections[detection_idx],
-                probation_frames=opt.reactivation_probation_frames,
-            )
-            confidence = 1.0 - distance / max(threshold, 1e-12)
-            track.match_confidence = float(np.clip(confidence, 0.0, 1.0))
-            self.tracks.append(track)
-            reactivated_rows.add(row)
-            reactivated_detections.add(detection_idx)
-            self.last_reactivation_info.append({
-                "track_id": int(track.track_id),
-                "detection_idx": int(detection_idx),
-                "distance": distance,
-                "learned_prob": learned_prob,
-                "accepted": True,
-                "reason": "accepted",
-            })
-
-        if reactivated_rows:
-            reactivated_track_ids = {
-                candidate_inactive_tracks[idx].track_id for idx in reactivated_rows
-            }
-            self.inactive_tracks = [
-                track for track in self.inactive_tracks
-                if track.track_id not in reactivated_track_ids
-            ]
-        return [
-            detection_idx for detection_idx in unmatched_detections
-            if detection_idx not in reactivated_detections
-        ]
-
-    def _reactivation_learned_prob_matrix(
-            self, candidate_tracks, detections, detection_indices):
-        if self.temporal_model is None:
-            return None
-        if len(candidate_tracks) == 0 or len(detection_indices) == 0:
-            return None
-        temporal_cost = self._temporal_cost_matrix(
-            candidate_tracks,
-            detections,
-            list(range(len(candidate_tracks))),
-            detection_indices,
-            require_fusion=False,
-        )
-        if temporal_cost is None:
-            return None
-        return 1.0 - temporal_cost
-
-    def _match_reactivation_probation_tracks(
-            self, detections, track_indices, detection_indices):
-        if len(track_indices) == 0 or len(detection_indices) == 0:
-            return [], track_indices, detection_indices
-
-        cost_matrix = np.zeros(
-            (len(track_indices), len(detection_indices)),
-            dtype=np.float32,
-        )
-        for row, track_idx in enumerate(track_indices):
-            for col, detection_idx in enumerate(detection_indices):
-                cost_matrix[row, col] = self._inactive_reactivation_distance(
-                    self.tracks[track_idx], detections[detection_idx]
-                )
-
-        threshold = float(opt.inactive_reactivation_threshold)
-        matches, unmatched_tracks, unmatched_detections = \
-            linear_assignment.min_cost_matching(
-                lambda *_args: cost_matrix,
-                threshold,
-                self.tracks,
-                detections,
-                track_indices,
-                detection_indices,
-            )
-        for track_idx, detection_idx in matches:
-            row = track_indices.index(track_idx)
-            col = detection_indices.index(detection_idx)
-            distance = float(cost_matrix[row, col])
-            confidence = 1.0 - distance / max(threshold, 1e-12)
-            self.tracks[track_idx].match_confidence = float(np.clip(confidence, 0.0, 1.0))
-            self.last_match_confidences[(track_idx, detection_idx)] = \
-                self.tracks[track_idx].match_confidence
-        return matches, unmatched_tracks, unmatched_detections
 
     @staticmethod
     def _build_short_history(track, history_len):
@@ -446,12 +216,13 @@ class Tracker:
             return temporal_cost
 
         with torch.no_grad():
+            temporal_device = next(self.temporal_model.parameters()).device
             logits = self.temporal_model(
-                torch.from_numpy(np.stack(det_batch, axis=0)),
-                torch.from_numpy(np.stack(short_batch, axis=0)),
-                long_hist_feat=torch.from_numpy(np.stack(long_batch, axis=0)),
-                short_hist_len=torch.from_numpy(np.asarray(short_len_batch, dtype=np.int64)),
-                long_hist_len=torch.from_numpy(np.asarray(long_len_batch, dtype=np.int64)),
+                torch.from_numpy(np.stack(det_batch, axis=0)).to(temporal_device),
+                torch.from_numpy(np.stack(short_batch, axis=0)).to(temporal_device),
+                long_hist_feat=torch.from_numpy(np.stack(long_batch, axis=0)).to(temporal_device),
+                short_hist_len=torch.from_numpy(np.asarray(short_len_batch, dtype=np.int64)).to(temporal_device),
+                long_hist_len=torch.from_numpy(np.asarray(long_len_batch, dtype=np.int64)).to(temporal_device),
                 return_attention=False,
             )
             probs = torch.sigmoid(logits).detach().cpu().numpy()
@@ -513,6 +284,21 @@ class Tracker:
                 fused[valid_mask] = fused[valid_mask] - min_value
         return fused
 
+    def _apply_temporal_veto(self, cost_matrix, temporal_cost):
+        if self.temporal_veto_cost < 0:
+            return cost_matrix
+        if temporal_cost is None:
+            return cost_matrix
+        if temporal_cost.shape != cost_matrix.shape:
+            return cost_matrix
+        vetoed = cost_matrix.copy()
+        # temporal_cost is initialized to 1.0 for pairs not evaluated by the
+        # learned model. Avoid vetoing those default placeholders.
+        evaluated_mask = temporal_cost < 0.999999
+        veto_mask = evaluated_mask & (temporal_cost > self.temporal_veto_cost)
+        vetoed[veto_mask] = linear_assignment.INFTY_COST
+        return vetoed
+
     def _gate_cost_matrix_with_temporal_rescue(
             self, cost_matrix, temporal_cost, tracks, detections,
             track_indices, detection_indices, gated_cost=linear_assignment.INFTY_COST):
@@ -565,6 +351,155 @@ class Tracker:
                 if not rescue:
                     cost_matrix[row, col] = gated_cost
         return cost_matrix
+
+    def _kalman_gating_distance_matrix(
+            self, tracks, detections, track_indices, detection_indices):
+        if len(track_indices) == 0 or len(detection_indices) == 0:
+            return np.zeros((len(track_indices), len(detection_indices)), dtype=np.float32)
+        measurements = np.asarray([detections[i].to_xyah() for i in detection_indices])
+        distances = np.zeros((len(track_indices), len(detection_indices)), dtype=np.float32)
+        for row, track_idx in enumerate(track_indices):
+            track = tracks[track_idx]
+            distances[row] = track.kf.gating_distance(
+                track.mean, track.covariance, measurements, only_position=False
+            )
+        return distances
+
+    @staticmethod
+    def _matrix_to_list(matrix):
+        if matrix is None:
+            return None
+        arr = np.asarray(matrix, dtype=np.float64)
+        out = []
+        for row in arr:
+            out.append([
+                None if not np.isfinite(value) else float(value)
+                for value in row
+            ])
+        return out
+
+    def _write_matching_debug(
+            self, stage, tracks, detections, track_indices, detection_indices,
+            base_cost, temporal_cost, fused_cost_before_kalman,
+            gating_distance, final_cost_after_kalman):
+        if not self.matching_debug_jsonl:
+            return
+
+        big_cost = linear_assignment.INFTY_COST
+        gating_threshold = kalman_filter.chi2inv95[4]
+        row_summary = []
+        assigned_by_final_cost = {}
+        if final_cost_after_kalman.size > 0:
+            assignment = linear_assignment.linear_assignment(final_cost_after_kalman.copy())
+            for row, col in assignment:
+                if float(final_cost_after_kalman[row, col]) < big_cost:
+                    assigned_by_final_cost[int(row)] = int(col)
+
+        for row, track_idx in enumerate(track_indices):
+            learned_best_col = None
+            if temporal_cost is not None and temporal_cost.shape == final_cost_after_kalman.shape:
+                temporal_row = temporal_cost[row]
+                valid_temporal = np.isfinite(temporal_row)
+                if np.any(valid_temporal):
+                    learned_best_col = int(np.argmin(np.where(
+                        valid_temporal, temporal_row, np.inf
+                    )))
+
+            final_best_col = None
+            finite_final = final_cost_after_kalman[row] < big_cost
+            if np.any(finite_final):
+                final_best_col = int(np.argmin(np.where(
+                    finite_final, final_cost_after_kalman[row], np.inf
+                )))
+
+            assigned_col = assigned_by_final_cost.get(row)
+            learned_best_gated = None
+            learned_best_gate_distance = None
+            learned_best_final_cost = None
+            if learned_best_col is not None:
+                learned_best_final_cost = float(final_cost_after_kalman[row, learned_best_col])
+                learned_best_gated = bool(learned_best_final_cost >= big_cost)
+                learned_best_gate_distance = float(gating_distance[row, learned_best_col])
+
+            row_summary.append({
+                "track_index": int(track_idx),
+                "track_id": int(tracks[track_idx].track_id),
+                "learned_best_detection_index": (
+                    None if learned_best_col is None
+                    else int(detection_indices[learned_best_col])
+                ),
+                "learned_best_temporal_cost": (
+                    None if learned_best_col is None or temporal_cost is None
+                    else float(temporal_cost[row, learned_best_col])
+                ),
+                "learned_best_gating_distance": learned_best_gate_distance,
+                "learned_best_over_gate_threshold": (
+                    None if learned_best_gate_distance is None
+                    else bool(learned_best_gate_distance > gating_threshold)
+                ),
+                "learned_best_final_cost": learned_best_final_cost,
+                "learned_best_gated_to_infty": learned_best_gated,
+                "final_best_detection_index": (
+                    None if final_best_col is None
+                    else int(detection_indices[final_best_col])
+                ),
+                "final_best_cost": (
+                    None if final_best_col is None
+                    else float(final_cost_after_kalman[row, final_best_col])
+                ),
+                "assigned_by_final_cost_detection_index": (
+                    None if assigned_col is None
+                    else int(detection_indices[assigned_col])
+                ),
+                "learned_best_equals_final_best": (
+                    None if learned_best_col is None or final_best_col is None
+                    else bool(learned_best_col == final_best_col)
+                ),
+                "learned_best_equals_assigned_by_final_cost": (
+                    None if learned_best_col is None or assigned_col is None
+                    else bool(learned_best_col == assigned_col)
+                ),
+            })
+
+        record = {
+            "frame": None if self.matching_debug_frame is None else int(self.matching_debug_frame),
+            "stage": stage,
+            "call_index": int(self._matching_debug_call_index),
+            "track_indices": [int(i) for i in track_indices],
+            "track_ids": [int(tracks[i].track_id) for i in track_indices],
+            "detection_indices": [int(i) for i in detection_indices],
+            "base_cost": self._matrix_to_list(base_cost),
+            "temporal_cost": self._matrix_to_list(temporal_cost),
+            "fused_cost_before_kalman": self._matrix_to_list(fused_cost_before_kalman),
+            "gating_distance": self._matrix_to_list(gating_distance),
+            "final_cost_after_kalman": self._matrix_to_list(final_cost_after_kalman),
+            "gating_threshold": float(gating_threshold),
+            "infty_cost": float(big_cost),
+            "row_summary": row_summary,
+        }
+        self._matching_debug_call_index += 1
+        with open(self.matching_debug_jsonl, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def _write_assignment_debug(self, stage, matches):
+        if not self.matching_debug_jsonl:
+            return
+        record = {
+            "frame": None if self.matching_debug_frame is None else int(self.matching_debug_frame),
+            "stage": stage,
+            "call_index": int(self._matching_debug_call_index),
+            "assignments": [
+                {
+                    "track_index": int(track_idx),
+                    "track_id": int(self.tracks[track_idx].track_id),
+                    "detection_index": int(detection_idx),
+                }
+                for track_idx, detection_idx in matches
+            ],
+        }
+        self._matching_debug_call_index += 1
+        with open(self.matching_debug_jsonl, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     @staticmethod
     def _cost_to_confidence(cost, max_cost):
@@ -665,33 +600,18 @@ class Tracker:
             A list of detections at the current time step.
 
         """
-        self._prune_inactive_tracks()
         # Run matching cascade.
         matches, unmatched_tracks, unmatched_detections = \
             self._match(detections)
 
         # Update track set.
-        failed_probation_track_ids = set()
         for track_idx, detection_idx in matches:
             track = self.tracks[track_idx]
-            was_probation = track.is_in_reactivation_probation()
             track.update(detections[detection_idx])
-            if was_probation:
-                track.accept_reactivation_probation_match()
         for track_idx in unmatched_tracks:
             track = self.tracks[track_idx]
-            was_confirmed = track.is_confirmed()
-            if track.is_in_reactivation_probation():
-                failed_probation_track_ids.add(track.track_id)
-                track.fail_reactivation_probation()
-            else:
-                track.mark_missed()
-            if was_confirmed and track.is_deleted():
-                self._archive_track(track)
+            track.mark_missed()
         self.tracks = [t for t in self.tracks if not t.is_deleted()]
-        unmatched_detections = self._reactivate_inactive_tracks(
-            detections, unmatched_detections, failed_probation_track_ids
-        )
         for detection_idx in unmatched_detections:
             self._initiate_track(detections[detection_idx])
 
@@ -713,6 +633,7 @@ class Tracker:
         for track in self.tracks:
             track.match_confidence = None
         match_costs = {}
+        metric_stage = "unknown"
 
         def gated_metric(tracks, dets, track_indices, detection_indices):
             features = np.array([dets[i].feature for i in detection_indices])
@@ -722,10 +643,20 @@ class Tracker:
             else:
                 targets = np.array([tracks[i].track_id for i in track_indices])
                 cost_matrix = self.metric.distance(features, targets)
+            base_cost = cost_matrix.copy()
             temporal_cost = self._temporal_cost_matrix(
                 tracks, dets, track_indices, detection_indices
             )
             cost_matrix = self._fuse_temporal_cost(cost_matrix, temporal_cost)
+            if (
+                    self.fuse_temporal_model
+                    and temporal_cost is not None
+                    and self.temporal_veto_cost >= 0):
+                cost_matrix = self._apply_temporal_veto(cost_matrix, temporal_cost)
+            fused_cost_before_kalman = cost_matrix.copy()
+            gating_distance = self._kalman_gating_distance_matrix(
+                tracks, dets, track_indices, detection_indices
+            )
             if self.fuse_temporal_model and temporal_cost is not None and not opt.MC:
                 cost_matrix = self._gate_cost_matrix_with_temporal_rescue(
                     cost_matrix, temporal_cost, tracks, dets,
@@ -734,6 +665,18 @@ class Tracker:
                 cost_matrix = linear_assignment.gate_cost_matrix(
                     cost_matrix, tracks, dets, track_indices,
                     detection_indices)
+            self._write_matching_debug(
+                f"appearance_metric_{metric_stage}",
+                tracks,
+                dets,
+                track_indices,
+                detection_indices,
+                base_cost,
+                temporal_cost,
+                fused_cost_before_kalman,
+                gating_distance,
+                cost_matrix,
+            )
             for row, track_idx in enumerate(track_indices):
                 for col, detection_idx in enumerate(detection_indices):
                     match_costs[(track_idx, detection_idx)] = float(cost_matrix[row, col])
@@ -741,21 +684,16 @@ class Tracker:
             return cost_matrix
 
         # Split track set into confirmed and unconfirmed tracks.
-        probation_tracks = [
-            i for i, t in enumerate(self.tracks)
-            if t.is_in_reactivation_probation()
-        ]
         confirmed_tracks = [
-            i for i, t in enumerate(self.tracks)
-            if t.is_confirmed() and not t.is_in_reactivation_probation()]
+            i for i, t in enumerate(self.tracks) if t.is_confirmed()]
         unconfirmed_tracks = [
-            i for i, t in enumerate(self.tracks)
-            if not t.is_confirmed() and not t.is_in_reactivation_probation()]
+            i for i, t in enumerate(self.tracks) if not t.is_confirmed()]
 
         # Detect split ambiguity before the standard assignment step.
         detection_indices = list(range(len(detections)))
         ambiguous_tracks = []
         ambiguous_info = {}
+        metric_stage = "pre_ambiguity"
         if confirmed_tracks and detection_indices:
             cost_matrix = gated_metric(
                 self.tracks, detections, confirmed_tracks, detection_indices
@@ -790,10 +728,12 @@ class Tracker:
         self.last_ambiguous_info = ambiguous_info
 
         # Associate confirmed tracks using appearance features.
+        metric_stage = "cascade"
         matches_a, unmatched_tracks_a, unmatched_detections = \
             linear_assignment.matching_cascade(
                 gated_metric, self.metric.matching_threshold, self.max_age,
                 self.tracks, detections, confirmed_tracks)
+        self._write_assignment_debug("appearance_assignments", matches_a)
 
         # Associate remaining tracks together with unconfirmed tracks using IOU.
         iou_track_candidates = unconfirmed_tracks + [
@@ -806,13 +746,9 @@ class Tracker:
             linear_assignment.min_cost_matching(
                 iou_matching.iou_cost, self.max_iou_distance, self.tracks,
                 detections, iou_track_candidates, unmatched_detections)
+        self._write_assignment_debug("iou_assignments", matches_b)
 
-        matches_probation, unmatched_probation_tracks, unmatched_detections = \
-            self._match_reactivation_probation_tracks(
-                detections, probation_tracks, unmatched_detections
-            )
-
-        matches = matches_a + matches_b + matches_probation
+        matches = matches_a + matches_b
         appearance_confidences = self._combo_match_confidences(
             matches_a, match_costs, self.metric.matching_threshold
         )
@@ -842,7 +778,7 @@ class Tracker:
                 self.tracks[track_idx].match_confidence = confidence
                 self.last_match_confidences[(track_idx, detection_idx)] = confidence
         unmatched_tracks = list(set(
-            unmatched_tracks_a + unmatched_tracks_b + unmatched_probation_tracks
+            unmatched_tracks_a + unmatched_tracks_b
         ))
         return matches, unmatched_tracks, unmatched_detections
 

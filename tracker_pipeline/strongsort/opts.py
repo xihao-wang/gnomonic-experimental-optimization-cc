@@ -40,14 +40,6 @@ opt = SimpleNamespace(
     ambiguity_margin=0.003,
     match_conf_margin_scale=0.02,
 
-    # Optional inactive/reactivation settings
-    inactive_max_tracks=100,
-    inactive_max_age=1000000,
-    inactive_reactivation_threshold=0.12,
-    inactive_reactivation_margin=0.04,
-    inactive_reactivation_learned_min_prob=0.5,
-    reactivation_probation_frames=3,
-
     # Phase/truncation options kept for copied code compatibility
     phase_old_sim_threshold=0.45,
     phase_short_sim_threshold=0.75,
@@ -63,6 +55,4 @@ opt = SimpleNamespace(
     enable_memory_matching=True,
     enable_topk_matching=True,
     enable_phase_truncation=False,
-    enable_inactive_reactivation=False,
 )
-

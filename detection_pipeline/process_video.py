@@ -23,6 +23,7 @@ if str(_parent_dir) not in sys.path:
 from detection_pipeline.config import get_cfg
 from detection_pipeline.pipeline import DetectionPipeline
 from detection_pipeline.backprojection import draw_rotated_bbox
+from image_composer.multi_persp import draw_fov_on_fisheye, generate_rainbow_colors
 
 
 def find_next_session_number(base_dir: Path, video_stem: str) -> int:
@@ -199,6 +200,22 @@ def process_video():
                         color=cfg.VIDEO.BBOX_COLOR,
                         thickness=cfg.VIDEO.BBOX_THICKNESS,
                         draw_label=cfg.VIDEO.SHOW_LABELS
+                    )
+
+            # Optional overlay: per-projection FOV outline in unique colours.
+            if cfg.OUTPUT.SAVE_FISHEYE_PROJ_BORDERS and metadata and metadata.get("proj_list"):
+                fh, fw = annotated_fisheye.shape[:2]
+                fcx, fcy = fw // 2, fh // 2
+                fr = min(fcx, fcy)
+                proj_list = metadata["proj_list"]
+                proj_colors = generate_rainbow_colors(len(proj_list))
+                for pparams, pcolor in zip(proj_list, proj_colors):
+                    annotated_fisheye = draw_fov_on_fisheye(
+                        annotated_fisheye, fcx, fcy, fr,
+                        pparams["longitude"], pparams["latitude"],
+                        pparams["fov_h"], pparams["fov_v"],
+                        color=pcolor,
+                        thickness=cfg.OUTPUT.PROJ_BORDERS_THICKNESS,
                     )
 
             fisheye_writer.write(annotated_fisheye)

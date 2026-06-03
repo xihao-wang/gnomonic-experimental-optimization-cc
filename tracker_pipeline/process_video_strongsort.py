@@ -37,7 +37,7 @@ from detection_pipeline.backprojection import build_radial_bbox, draw_rotated_bb
 from detection_pipeline.config import get_cfg as get_detection_cfg
 from detection_pipeline.pipeline import DetectionPipeline
 from image_composer.presets import get_preset
-from tracker_pipeline.gnomonic_adapter import build_tracker_detections
+from tracker_pipeline.gnomonic_adapter import build_tracker_detections, _tracking_tlwh_from_bbox
 from tracker_pipeline.reid import FastReIDFeatureExtractor
 from tracker_pipeline.strongsort import nn_matching
 from tracker_pipeline.strongsort.detection import Detection as StrongSortDetection
@@ -229,6 +229,36 @@ def _write_mot_result_txt(path: Path, frame_idx: int, tracker: Tracker) -> None:
             ])
 
 
+def _write_detections_mot_txt(path: Path, frame_idx: int, fisheye_bboxes: Sequence[Dict]) -> None:
+    """Append tracker-input detections in MOTChallenge-like format.
+
+    Format:
+        frame, -1, x, y, w, h, conf, -1, -1, -1
+    """
+    with path.open("a", newline="") as f:
+        writer = csv.writer(f)
+        for bbox in fisheye_bboxes or []:
+            try:
+                x, y, w, h = [float(v) for v in _tracking_tlwh_from_bbox(bbox)]
+            except (KeyError, TypeError, ValueError):
+                continue
+            if w <= 0.0 or h <= 0.0:
+                continue
+            conf = float(bbox.get("confidence", bbox.get("source_confidence", 1.0)))
+            writer.writerow([
+                frame_idx,
+                -1,
+                f"{x:.3f}",
+                f"{y:.3f}",
+                f"{w:.3f}",
+                f"{h:.3f}",
+                f"{conf:.6f}",
+                -1,
+                -1,
+                -1,
+            ])
+
+
 def _transcode_h264(input_video: Path, output_video: Path) -> bool:
     """Create a broadly compatible H.264 MP4 copy with ffmpeg if available."""
     if shutil.which("ffmpeg") is None:
@@ -291,7 +321,14 @@ def run(args: argparse.Namespace) -> Path:
     output_dir = _make_output_dir(_resolve(args.output_dir), input_path)
     tracks_csv = output_dir / "tracks.csv"
     mot_result_txt = output_dir / "result.txt"
+    detections_mot_txt = output_dir / "detections_mot.txt"
     video_out_path = output_dir / "tracked_fisheye.mp4"
+    matching_debug_jsonl = None
+    if args.matching_debug_jsonl:
+        matching_debug_jsonl = _resolve(args.matching_debug_jsonl)
+        matching_debug_jsonl.parent.mkdir(parents=True, exist_ok=True)
+        if matching_debug_jsonl.exists():
+            matching_debug_jsonl.unlink()
 
     det_cfg = _build_detection_cfg(args)
     projection_input_path = image_sequence[0] if input_is_sequence else input_path
@@ -310,7 +347,6 @@ def run(args: argparse.Namespace) -> Path:
     strongsort_opt.enable_memory_matching = bool(args.memory_aware)
     strongsort_opt.enable_topk_matching = bool(args.topk)
     strongsort_opt.enable_memory_init_control = bool(args.memory_init)
-    strongsort_opt.enable_inactive_reactivation = False
     strongsort_opt.MC = False
 
     temporal_model = None
@@ -332,6 +368,8 @@ def run(args: argparse.Namespace) -> Path:
         fuse_temporal_model=args.fuse_learned_temporal,
         temporal_max_correction=args.learned_temporal_max_correction,
         temporal_min_scale=args.learned_temporal_min_scale,
+        temporal_veto_cost=args.learned_temporal_veto_cost,
+        matching_debug_jsonl=str(matching_debug_jsonl) if matching_debug_jsonl else None,
     )
 
     cap = None
@@ -408,8 +446,10 @@ def run(args: argparse.Namespace) -> Path:
             reid_source=args.reid_crop_source,
         )
         detections = _make_strongsort_detections(adapter_dets)
+        _write_detections_mot_txt(detections_mot_txt, frame_idx, fisheye_bboxes)
 
         tracker.predict()
+        tracker.matching_debug_frame = frame_idx
         tracker.update(detections)
 
         vis = frame.copy()
@@ -448,6 +488,7 @@ def run(args: argparse.Namespace) -> Path:
         f.write(f"output_video_h264={h264_video_path if h264_created else ''}\n")
         f.write(f"tracks_csv={tracks_csv}\n")
         f.write(f"mot_result_txt={mot_result_txt}\n")
+        f.write(f"detections_mot_txt={detections_mot_txt}\n")
         f.write(f"processed_frames={processed}\n")
         f.write(f"projection_preset={args.preset}\n")
         f.write(f"yolo_model={_resolve(args.yolo_model)}\n")
@@ -464,6 +505,8 @@ def run(args: argparse.Namespace) -> Path:
         f.write(f"learned_temporal_alpha={args.learned_temporal_alpha}\n")
         f.write(f"learned_temporal_min_scale={args.learned_temporal_min_scale}\n")
         f.write(f"learned_temporal_max_correction={args.learned_temporal_max_correction}\n")
+        f.write(f"learned_temporal_veto_cost={args.learned_temporal_veto_cost}\n")
+        f.write(f"matching_debug_jsonl={matching_debug_jsonl or ''}\n")
 
     if h264_created:
         print(f"h264 : {h264_video_path}")
@@ -533,6 +576,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learned-temporal-alpha", type=float, default=1.0)
     parser.add_argument("--learned-temporal-min-scale", type=float, default=0.02)
     parser.add_argument("--learned-temporal-max-correction", type=float, default=0.02)
+    parser.add_argument(
+        "--learned-temporal-veto-cost",
+        type=float,
+        default=0.8,
+        help="Veto learned temporal pairs above this cost. Use a negative value to disable veto.",
+    )
+    parser.add_argument(
+        "--matching-debug-jsonl",
+        default=None,
+        help="Optional JSONL path for per-frame matching costs and Kalman gating diagnostics.",
+    )
 
     parser.add_argument("--process-every", type=int, default=1)
     parser.add_argument("--max-frames", type=int, default=None)
