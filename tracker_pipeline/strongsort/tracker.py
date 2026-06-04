@@ -41,6 +41,8 @@ class Tracker:
                  temporal_model=None, temporal_alpha=1.0,
                  fuse_temporal_model=False, temporal_max_correction=0.02,
                  temporal_min_scale=0.02, temporal_veto_cost=0.8,
+                 association_veto_model=None,
+                 association_veto_threshold=0.7,
                  matching_debug_jsonl=None):
         self.metric = metric
         self.max_iou_distance = max_iou_distance
@@ -52,6 +54,8 @@ class Tracker:
         self.temporal_max_correction = float(temporal_max_correction)
         self.temporal_min_scale = float(temporal_min_scale)
         self.temporal_veto_cost = float(temporal_veto_cost)
+        self.association_veto_model = association_veto_model
+        self.association_veto_threshold = float(association_veto_threshold)
 
         self.tracks = []
         self._next_id = 1
@@ -366,6 +370,58 @@ class Tracker:
         return distances
 
     @staticmethod
+    def _tlwh_iou(a, b):
+        ax, ay, aw, ah = [float(v) for v in a]
+        bx, by, bw, bh = [float(v) for v in b]
+        ax2, ay2 = ax + aw, ay + ah
+        bx2, by2 = bx + bw, by + bh
+        ix1, iy1 = max(ax, bx), max(ay, by)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+        inter = iw * ih
+        union = aw * ah + bw * bh - inter
+        if union <= 0:
+            return 0.0
+        return float(inter / union)
+
+    def _iou_matrix(self, tracks, detections, track_indices, detection_indices):
+        out = np.zeros((len(track_indices), len(detection_indices)), dtype=np.float32)
+        for row, track_idx in enumerate(track_indices):
+            track_box = tracks[track_idx].to_tlwh()
+            for col, detection_idx in enumerate(detection_indices):
+                out[row, col] = self._tlwh_iou(track_box, detections[detection_idx].tlwh)
+        return out
+
+    def _apply_association_veto(
+            self, cost_matrix, tracks, detections, track_indices, detection_indices,
+            base_cost, temporal_cost, gating_distance, iou_matrix):
+        if self.association_veto_model is None or self.association_veto_threshold < 0:
+            return cost_matrix
+        if len(track_indices) == 0 or len(detection_indices) == 0:
+            return cost_matrix
+
+        features = []
+        for row, track_idx in enumerate(track_indices):
+            track = tracks[track_idx]
+            for col, _detection_idx in enumerate(detection_indices):
+                temporal = 1.0 - float(temporal_cost[row, col]) if temporal_cost is not None else 0.0
+                if temporal_cost is not None and float(temporal_cost[row, col]) >= 0.999999:
+                    temporal = 0.0
+                features.append([
+                    temporal,
+                    float(base_cost[row, col]),
+                    float(gating_distance[row, col]),
+                    float(iou_matrix[row, col]),
+                    float(track.time_since_update),
+                ])
+
+        probs = self.association_veto_model.predict_proba(np.asarray(features, dtype=np.float32))
+        probs = np.asarray(probs, dtype=np.float32).reshape(len(track_indices), len(detection_indices))
+        vetoed = cost_matrix.copy()
+        vetoed[probs < self.association_veto_threshold] = linear_assignment.INFTY_COST
+        return vetoed
+
+    @staticmethod
     def _matrix_to_list(matrix):
         if matrix is None:
             return None
@@ -467,11 +523,22 @@ class Tracker:
             "call_index": int(self._matching_debug_call_index),
             "track_indices": [int(i) for i in track_indices],
             "track_ids": [int(tracks[i].track_id) for i in track_indices],
+            "track_ages": [int(tracks[i].time_since_update) for i in track_indices],
+            "track_tlwhs": [
+                [float(v) for v in tracks[i].to_tlwh()]
+                for i in track_indices
+            ],
             "detection_indices": [int(i) for i in detection_indices],
+            "detection_confidences": [float(detections[i].confidence) for i in detection_indices],
+            "detection_tlwhs": [
+                [float(v) for v in detections[i].tlwh]
+                for i in detection_indices
+            ],
             "base_cost": self._matrix_to_list(base_cost),
             "temporal_cost": self._matrix_to_list(temporal_cost),
             "fused_cost_before_kalman": self._matrix_to_list(fused_cost_before_kalman),
             "gating_distance": self._matrix_to_list(gating_distance),
+            "iou": self._matrix_to_list(self._iou_matrix(tracks, detections, track_indices, detection_indices)),
             "final_cost_after_kalman": self._matrix_to_list(final_cost_after_kalman),
             "gating_threshold": float(gating_threshold),
             "infty_cost": float(big_cost),
@@ -657,7 +724,23 @@ class Tracker:
             gating_distance = self._kalman_gating_distance_matrix(
                 tracks, dets, track_indices, detection_indices
             )
-            if self.fuse_temporal_model and temporal_cost is not None and not opt.MC:
+            iou_matrix = self._iou_matrix(tracks, dets, track_indices, detection_indices)
+            association_veto_applied = (
+                self.association_veto_model is not None
+                and self.association_veto_threshold >= 0
+            )
+            cost_matrix = self._apply_association_veto(
+                cost_matrix,
+                tracks,
+                dets,
+                track_indices,
+                detection_indices,
+                base_cost,
+                temporal_cost,
+                gating_distance,
+                iou_matrix,
+            )
+            if self.fuse_temporal_model and temporal_cost is not None and not opt.MC and not association_veto_applied:
                 cost_matrix = self._gate_cost_matrix_with_temporal_rescue(
                     cost_matrix, temporal_cost, tracks, dets,
                     track_indices, detection_indices)

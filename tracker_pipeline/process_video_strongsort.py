@@ -41,6 +41,7 @@ from tracker_pipeline.gnomonic_adapter import build_tracker_detections, _trackin
 from tracker_pipeline.reid import FastReIDFeatureExtractor
 from tracker_pipeline.strongsort import nn_matching
 from tracker_pipeline.strongsort.detection import Detection as StrongSortDetection
+from tracker_pipeline.strongsort.association_veto_model import load_association_veto_scorer
 from tracker_pipeline.strongsort.temporal_model import TemporalAttentionScorer
 from tracker_pipeline.strongsort.tracker import Tracker
 from tracker_pipeline.strongsort.opts import opt as strongsort_opt
@@ -353,6 +354,13 @@ def run(args: argparse.Namespace) -> Path:
     if args.learned_temporal:
         temporal_model = _load_temporal_model(_resolve(args.tracker_model), args.temporal_device)
 
+    association_veto_model = None
+    if args.association_veto_model:
+        association_veto_model = load_association_veto_scorer(
+            _resolve(args.association_veto_model),
+            device=args.association_veto_device,
+        )
+
     metric = nn_matching.NearestNeighborDistanceMetric(
         "cosine",
         matching_threshold=args.matching_threshold,
@@ -369,6 +377,8 @@ def run(args: argparse.Namespace) -> Path:
         temporal_max_correction=args.learned_temporal_max_correction,
         temporal_min_scale=args.learned_temporal_min_scale,
         temporal_veto_cost=args.learned_temporal_veto_cost,
+        association_veto_model=association_veto_model,
+        association_veto_threshold=args.association_veto_threshold,
         matching_debug_jsonl=str(matching_debug_jsonl) if matching_debug_jsonl else None,
     )
 
@@ -506,6 +516,9 @@ def run(args: argparse.Namespace) -> Path:
         f.write(f"learned_temporal_min_scale={args.learned_temporal_min_scale}\n")
         f.write(f"learned_temporal_max_correction={args.learned_temporal_max_correction}\n")
         f.write(f"learned_temporal_veto_cost={args.learned_temporal_veto_cost}\n")
+        f.write(f"association_veto_model={_resolve(args.association_veto_model) if args.association_veto_model else ''}\n")
+        f.write(f"association_veto_device={args.association_veto_device}\n")
+        f.write(f"association_veto_threshold={args.association_veto_threshold}\n")
         f.write(f"matching_debug_jsonl={matching_debug_jsonl or ''}\n")
 
     if h264_created:
@@ -586,6 +599,18 @@ def parse_args() -> argparse.Namespace:
         "--matching-debug-jsonl",
         default=None,
         help="Optional JSONL path for per-frame matching costs and Kalman gating diagnostics.",
+    )
+    parser.add_argument(
+        "--association-veto-model",
+        default=None,
+        help="Optional checkpoint for learned association veto probability.",
+    )
+    parser.add_argument("--association-veto-device", default="cpu")
+    parser.add_argument(
+        "--association-veto-threshold",
+        type=float,
+        default=0.7,
+        help="Veto pairs whose learned match probability is below this threshold. Use a negative value to disable.",
     )
 
     parser.add_argument("--process-every", type=int, default=1)

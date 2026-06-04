@@ -242,6 +242,48 @@ veto\_model\_appris - modèle appris & +0.749 & +0.572 & +1.113 & +0.765 & +2.60
 \caption{Deltas COMBINED sur filter GT. Les deltas positifs indiquent une hausse de la métrique ; pour IDSW, une valeur négative est meilleure.}
 \end{table}
 
+\section{Comparaison ancienne détection contre détection dedup}
+
+Cette comparaison utilise le même modèle temporel appris sans veto, mais change uniquement la version de détection utilisée en entrée du tracker. Elle permet de vérifier si la déduplication améliore ou dégrade le suivi final, au-delà de la qualité de détection pure.
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l l r r r r r r r r}
+\toprule
+\textbf{Sequence} & \textbf{Détection} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
+\midrule
+convenience\_store & ancienne détection & 49.950 & \textbf{46.685} & 53.877 & 65.044 & \textbf{39.281} & 1 & \textbf{1531} & 2453 \\
+convenience\_store & détection dedup & \textbf{50.925} & 46.699 & \textbf{55.965} & \textbf{67.278} & 39.144 & \textbf{0} & 1537 & \textbf{2457} \\
+\midrule
+empty\_store & ancienne détection & \textbf{30.606} & \textbf{41.054} & \textbf{22.859} & \textbf{25.557} & \textbf{-9.497} & \textbf{1} & \textbf{174} & \textbf{217} \\
+empty\_store & détection dedup & \textbf{30.606} & \textbf{41.054} & \textbf{22.859} & \textbf{25.557} & \textbf{-9.497} & \textbf{1} & \textbf{174} & \textbf{217} \\
+\midrule
+exhibition & ancienne détection & 39.689 & 34.207 & 49.066 & 48.206 & -0.040 & 23 & 5834 & 4138 \\
+exhibition & détection dedup & \textbf{42.512} & \textbf{34.558} & \textbf{54.877} & \textbf{51.125} & \textbf{0.170} & \textbf{9} & \textbf{5814} & 4151 \\
+\midrule
+it\_office & ancienne détection & \textbf{44.944} & 31.937 & \textbf{65.337} & \textbf{44.559} & 15.245 & \textbf{5} & \textbf{1219} & 3941 \\
+it\_office & détection dedup & 44.279 & \textbf{32.003} & 63.016 & 42.966 & \textbf{15.277} & \textbf{5} & \textbf{1219} & \textbf{3939} \\
+\midrule
+large\_office & ancienne détection & 35.742 & \textbf{25.944} & 51.043 & 39.460 & 23.193 & 3 & 239 & \textbf{1490} \\
+large\_office & détection dedup & \textbf{35.934} & 25.868 & \textbf{51.676} & \textbf{39.865} & \textbf{23.326} & \textbf{2} & \textbf{234} & 1493 \\
+\midrule
+large\_office\_2 & ancienne détection & \textbf{49.847} & \textbf{44.710} & \textbf{57.854} & \textbf{57.166} & \textbf{34.217} & \textbf{1} & \textbf{493} & \textbf{821} \\
+large\_office\_2 & détection dedup & \textbf{49.847} & \textbf{44.710} & \textbf{57.854} & \textbf{57.166} & \textbf{34.217} & \textbf{1} & \textbf{493} & \textbf{821} \\
+\midrule
+warehouse & ancienne détection & \textbf{17.534} & \textbf{12.958} & \textbf{24.255} & \textbf{22.081} & \textbf{3.230} & \textbf{4} & \textbf{501} & \textbf{3570} \\
+warehouse & détection dedup & 17.527 & 12.952 & 24.248 & 22.073 & 3.182 & \textbf{4} & 503 & \textbf{3570} \\
+\midrule
+\textbf{COMBINED} & ancienne détection & 41.544 & 33.786 & 53.144 & 48.566 & 15.290 & 38 & 9991 & \textbf{16630} \\
+\textbf{COMBINED} & détection dedup & \textbf{42.723} & \textbf{33.926} & \textbf{55.614} & \textbf{49.929} & \textbf{15.338} & \textbf{22} & \textbf{9974} & 16648 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Comparaison standard GT entre ancienne détection et détection dedup avec le même modèle appris sans veto.}
+\end{table}
+
+On observe que, dans les scènes plus complexes avec plusieurs personnes, la détection dedup donne un meilleur comportement de suivi que l'ancienne détection, notamment grâce à une baisse nette du nombre de changements d'identité.
+
 \section{Analyse}
 
 Sur standard GT, le modèle appris améliore fortement l'association globale par rapport à la baseline dedup : HOTA passe de 39.346 à 42.723, AssA de 47.188 à 55.614 et IDF1 de 45.355 à 49.929. \texttt{veto\_model\_appris} ajoute un léger gain global sur HOTA, AssA, IDF1 et MOTA, mais il augmente IDSW par rapport au modèle appris : 22 vers 36. 
@@ -282,5 +324,55 @@ Le modèle appris reconnecte donc un stale track sur un bloc long : IDSW diminue
     \item Utiliser Optuna pour rechercher les meilleurs hyperparamètres et estimer la performance maximale atteignable par le modèle dans la configuration actuelle.
     \item Construire un dataset interne avec des changements de vêtements, afin de tester plus directement la robustesse du tracker face aux variations fortes d'apparence.
 \end{itemize}
+
+\section{Comparaison avec AFLink}
+
+Cette dernière comparaison ajoute un post-traitement AFLink au modèle appris sans veto. AFLink ne modifie pas les boîtes détectées : il relie uniquement des tracklets après le tracking. Les métriques de détection restent donc proches de celles du modèle appris, tandis que les changements portent surtout sur l'association et le nombre d'identités.
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l l r r r r r r r r}
+\toprule
+\textbf{Sequence} & \textbf{Configuration} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
+\midrule
+convenience\_store & dedup baseline & 45.253 & 46.339 & 44.397 & 58.631 & 38.763 & 17 & \textbf{1532} & 2470 \\
+convenience\_store & modèle appris & \textbf{50.925} & \textbf{46.699} & \textbf{55.965} & \textbf{67.278} & \textbf{39.144} & \textbf{0} & 1537 & \textbf{2457} \\
+convenience\_store & modèle appris + AFLink & \textbf{50.925} & \textbf{46.699} & \textbf{55.965} & \textbf{67.278} & \textbf{39.144} & \textbf{0} & 1537 & \textbf{2457} \\
+\midrule
+empty\_store & dedup baseline & 30.606 & \textbf{41.054} & 22.859 & 25.557 & -9.497 & 1 & \textbf{174} & \textbf{217} \\
+empty\_store & modèle appris & 30.606 & \textbf{41.054} & 22.859 & 25.557 & -9.497 & 1 & \textbf{174} & \textbf{217} \\
+empty\_store & modèle appris + AFLink & \textbf{41.054} & \textbf{41.054} & \textbf{41.054} & \textbf{41.902} & \textbf{-9.218} & \textbf{0} & \textbf{174} & \textbf{217} \\
+\midrule
+exhibition & dedup baseline & 38.607 & \textbf{34.763} & 45.784 & 45.802 & \textbf{1.812} & 16 & \textbf{5613} & 4181 \\
+exhibition & modèle appris & \textbf{42.512} & 34.558 & \textbf{54.877} & \textbf{51.125} & 0.170 & \textbf{9} & 5814 & \textbf{4151} \\
+exhibition & modèle appris + AFLink & 42.508 & 34.557 & 54.864 & \textbf{51.125} & 0.170 & \textbf{9} & 5814 & \textbf{4151} \\
+\midrule
+it\_office & dedup baseline & 40.873 & 31.921 & 53.017 & 39.353 & 15.162 & 8 & \textbf{1216} & 3946 \\
+it\_office & modèle appris & 44.279 & 32.003 & 63.016 & 42.966 & 15.277 & 5 & 1219 & \textbf{3939} \\
+it\_office & modèle appris + AFLink & \textbf{44.286} & \textbf{32.004} & \textbf{63.031} & \textbf{42.966} & \textbf{15.294} & \textbf{4} & 1219 & \textbf{3939} \\
+\midrule
+large\_office & dedup baseline & 35.535 & 25.638 & 50.937 & 38.137 & \textbf{24.656} & 3 & \textbf{203} & \textbf{1493} \\
+large\_office & modèle appris & \textbf{35.934} & \textbf{25.868} & \textbf{51.676} & \textbf{39.865} & 23.326 & \textbf{2} & 234 & \textbf{1493} \\
+large\_office & modèle appris + AFLink & \textbf{35.934} & \textbf{25.868} & \textbf{51.676} & \textbf{39.865} & 23.326 & \textbf{2} & 234 & \textbf{1493} \\
+\midrule
+large\_office\_2 & dedup baseline & 48.930 & 44.393 & 56.327 & 57.002 & 33.067 & 3 & \textbf{493} & 842 \\
+large\_office\_2 & modèle appris & 49.847 & \textbf{44.710} & 57.854 & 57.166 & 34.217 & 1 & \textbf{493} & \textbf{821} \\
+large\_office\_2 & modèle appris + AFLink & \textbf{51.915} & 44.708 & \textbf{62.140} & \textbf{64.196} & \textbf{34.267} & \textbf{0} & \textbf{493} & \textbf{821} \\
+\midrule
+warehouse & dedup baseline & \textbf{19.445} & 12.770 & \textbf{29.715} & \textbf{22.719} & \textbf{3.277} & 5 & \textbf{486} & 3582 \\
+warehouse & modèle appris & 17.527 & \textbf{12.952} & 24.248 & 22.073 & 3.182 & \textbf{4} & 503 & \textbf{3570} \\
+warehouse & modèle appris + AFLink & 17.111 & \textbf{12.952} & 23.168 & 22.073 & 3.182 & \textbf{4} & 503 & \textbf{3570} \\
+\midrule
+\textbf{COMBINED} & dedup baseline & 39.346 & 33.868 & 47.188 & 45.355 & \textbf{15.792} & 53 & \textbf{9717} & 16731 \\
+\textbf{COMBINED} & modèle appris & 42.723 & \textbf{33.926} & 55.614 & 49.929 & 15.338 & 22 & 9974 & \textbf{16648} \\
+\textbf{COMBINED} & modèle appris + AFLink & \textbf{42.947} & \textbf{33.926} & \textbf{56.137} & \textbf{50.583} & 15.347 & \textbf{19} & 9974 & \textbf{16648} \\
+\bottomrule
+\end{tabular}
+}
+\caption{Évaluation standard GT : baseline dedup, modèle appris, et modèle appris avec post-traitement AFLink.}
+\end{table}
+
+AFLink améliore surtout la continuité d'identité : sur le score combiné, IDSW passe de 22 à 19 et IDF1 de 49.929 à 50.583 par rapport au modèle appris seul. Le gain global reste modéré, mais il montre que le post-traitement de tracklets peut compléter le modèle temporel sans modifier les détections.
 
 \end{document}
