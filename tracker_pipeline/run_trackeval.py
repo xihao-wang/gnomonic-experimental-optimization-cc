@@ -4,6 +4,7 @@ import argparse
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -65,7 +66,7 @@ def _prepare_wepdtof_gt(args: argparse.Namespace, gt_root: Path) -> None:
     for seq in args.sequences:
         subprocess.run(
             [
-                "python3",
+                sys.executable,
                 str(project / "tracker_pipeline/wepdtof_gt_to_viewer.py"),
                 "--frames-dir",
                 str(args.wepdtof_root / "frames" / seq),
@@ -108,7 +109,7 @@ def main() -> None:
     seqmap.write_text("name\n" + "\n".join(args.sequences) + "\n")
 
     cmd = [
-        "python3",
+        sys.executable,
         str(args.trackeval_root / "scripts/run_mot_challenge.py"),
         "--GT_FOLDER",
         str(gt_root),

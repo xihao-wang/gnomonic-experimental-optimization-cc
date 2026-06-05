@@ -398,14 +398,16 @@ def run(args: argparse.Namespace) -> Path:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    writer = cv2.VideoWriter(
-        str(video_out_path),
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        fps,
-        (width, height),
-    )
-    if not writer.isOpened():
-        raise RuntimeError(f"Could not create output video: {video_out_path}")
+    writer = None
+    if not args.no_video:
+        writer = cv2.VideoWriter(
+            str(video_out_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps,
+            (width, height),
+        )
+        if not writer.isOpened():
+            raise RuntimeError(f"Could not create output video: {video_out_path}")
 
     trail_history: Dict[int, List[Tuple[int, int]]] = defaultdict(list)
     frame_idx = 0
@@ -439,7 +441,8 @@ def run(args: argparse.Namespace) -> Path:
         if args.max_frames is not None and processed >= args.max_frames:
             break
         if frame_idx % args.process_every != 0:
-            writer.write(frame)
+            if writer is not None:
+                writer.write(frame)
             continue
 
         fisheye_bboxes, composite_image, raw_detections = pipeline.run(
@@ -462,9 +465,10 @@ def run(args: argparse.Namespace) -> Path:
         tracker.matching_debug_frame = frame_idx
         tracker.update(detections)
 
-        vis = frame.copy()
-        _draw_tracks(vis, tracker, trail_history, args.trail_length)
-        writer.write(vis)
+        if writer is not None:
+            vis = frame.copy()
+            _draw_tracks(vis, tracker, trail_history, args.trail_length)
+            writer.write(vis)
         _write_tracks_csv(tracks_csv, frame_idx, tracker)
         _write_mot_result_txt(mot_result_txt, frame_idx, tracker)
 
@@ -478,11 +482,12 @@ def run(args: argparse.Namespace) -> Path:
 
     if cap is not None:
         cap.release()
-    writer.release()
+    if writer is not None:
+        writer.release()
 
     h264_video_path = output_dir / "tracked_fisheye_h264.mp4"
     h264_created = False
-    if not args.no_h264_copy:
+    if writer is not None and not args.no_h264_copy:
         try:
             h264_created = _transcode_h264(video_out_path, h264_video_path)
         except subprocess.CalledProcessError as exc:
@@ -494,7 +499,7 @@ def run(args: argparse.Namespace) -> Path:
         f.write(f"input_kind={input_kind}\n")
         if input_is_sequence:
             f.write(f"image_sequence_frames={len(image_sequence)}\n")
-        f.write(f"output_video={video_out_path}\n")
+        f.write(f"output_video={video_out_path if writer is not None else ''}\n")
         f.write(f"output_video_h264={h264_video_path if h264_created else ''}\n")
         f.write(f"tracks_csv={tracks_csv}\n")
         f.write(f"mot_result_txt={mot_result_txt}\n")
@@ -618,6 +623,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sequence-fps", type=float, default=10.0)
     parser.add_argument("--trail-length", type=int, default=30)
     parser.add_argument("--log-every", type=int, default=25)
+    parser.add_argument("--no-video", action="store_true")
     parser.add_argument("--no-h264-copy", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
