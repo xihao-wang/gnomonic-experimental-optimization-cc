@@ -58,7 +58,12 @@ def _apply_redundant_bbox_filter_overrides(dp_cfg, overrides):
         if hasattr(node, key):
             return getattr(node, key)
         if isinstance(node, dict):
-            return node.get(key, default)
+            if key in node:
+                return node[key]
+            lower_key = key.lower()
+            for existing_key, value in node.items():
+                if str(existing_key).lower() == lower_key:
+                    return value
         return default
 
     bb = _get(overrides, "BORDER_BASED")
@@ -166,8 +171,31 @@ class DetectionPipeline:
                   img_path, proj_nbr, fov_h, fov_v, latitude, lon_0, lon_step,
                   grid, comp_sz, target_mp
         """
-        # Check if using preset
-        if self.cfg.PROJECTION.PRESET:
+        if self.cfg.PROJECTION.COMPOSITE_CONFIG_ID:
+            import importlib
+
+            registry = importlib.import_module(self.cfg.PROJECTION.COMPOSITE_CONFIG_MODULE)
+            wanted = self.cfg.PROJECTION.COMPOSITE_CONFIG_ID
+            entry = next((c for c in registry.ProjectionConfigs.CONFIGS if c["id"] == wanted), None)
+            if entry is None:
+                available = [c["id"] for c in registry.ProjectionConfigs.CONFIGS]
+                raise ValueError(
+                    f"PROJECTION.COMPOSITE_CONFIG_ID '{wanted}' not found in "
+                    f"{self.cfg.PROJECTION.COMPOSITE_CONFIG_MODULE}. Available: {available}"
+                )
+            proj_cfg = {
+                k: v for k, v in entry.items()
+                if k not in {"id", "name", "yolo_imgsz", "redundant_bbox_filter"}
+            }
+            proj_cfg["img_path"] = self.cfg.PROJECTION.CUSTOM_IMAGE or self.cfg.INPUT.IMAGE_PATH
+            if "redundant_bbox_filter" in entry:
+                _apply_redundant_bbox_filter_overrides(
+                    self.cfg,
+                    {"border_based": entry["redundant_bbox_filter"].get("border_based", {})},
+                )
+            if self.cfg.VERBOSE:
+                print(f"Using composite config: {wanted}")
+        elif self.cfg.PROJECTION.PRESET:
             proj_cfg = get_preset(self.cfg.PROJECTION.PRESET)
             if proj_cfg is None:
                 raise ValueError(f"Preset '{self.cfg.PROJECTION.PRESET}' not found")

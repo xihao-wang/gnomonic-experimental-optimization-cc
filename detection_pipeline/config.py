@@ -40,6 +40,12 @@ _C.INPUT.IMAGE_PATH = "fisheye-sample.png"
 
 _C.PROJECTION = CN()
 
+# Optional projection configuration id from the shared registry
+# configs/composite_configs.py. When set, the registry entry provides the
+# projection geometry and optional redundant bbox filter override.
+_C.PROJECTION.COMPOSITE_CONFIG_ID = None
+_C.PROJECTION.COMPOSITE_CONFIG_MODULE = "configs.composite_configs"
+
 # Preset to use: "yolo_grid", "default", "high_coverage", "horizon", "wide_angle", "high_res"
 # Set to None to use manual parameters below
 _C.PROJECTION.PRESET = None

@@ -35,7 +35,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from detection_pipeline.backprojection import build_radial_bbox, draw_rotated_bbox
 from detection_pipeline.config import get_cfg as get_detection_cfg
-from detection_pipeline.pipeline import DetectionPipeline
+from detection_pipeline.pipeline import DetectionPipeline, _apply_redundant_bbox_filter_overrides
 from image_composer.presets import get_preset
 from tracker_pipeline.gnomonic_adapter import build_tracker_detections, _tracking_tlwh_from_bbox
 from tracker_pipeline.reid import FastReIDFeatureExtractor
@@ -68,8 +68,9 @@ def _resolve(path: str) -> Path:
 
 def _build_detection_cfg(args: argparse.Namespace):
     cfg = get_detection_cfg()
-    cfg.PROJECTION.PRESET = args.preset
-    if args.preset is None:
+    cfg.PROJECTION.COMPOSITE_CONFIG_ID = args.composite_config_id
+    cfg.PROJECTION.PRESET = None if args.composite_config_id else args.preset
+    if args.composite_config_id is None and args.preset is None:
         cfg.PROJECTION.PROJ_NBR = args.proj_nbr
         cfg.PROJECTION.FOV_H = args.fov_h
         cfg.PROJECTION.FOV_V = args.fov_v
@@ -100,7 +101,27 @@ def _build_detection_cfg(args: argparse.Namespace):
 
 
 def _build_projection_config(det_cfg, input_path: Path) -> Dict:
-    if det_cfg.PROJECTION.PRESET:
+    if det_cfg.PROJECTION.COMPOSITE_CONFIG_ID:
+        import importlib
+
+        registry = importlib.import_module(det_cfg.PROJECTION.COMPOSITE_CONFIG_MODULE)
+        wanted = det_cfg.PROJECTION.COMPOSITE_CONFIG_ID
+        entry = next((c for c in registry.ProjectionConfigs.CONFIGS if c["id"] == wanted), None)
+        if entry is None:
+            available = [c["id"] for c in registry.ProjectionConfigs.CONFIGS]
+            raise ValueError(
+                f"Unknown composite config id: {wanted}. Available: {available}"
+            )
+        proj_cfg = {
+            k: v for k, v in entry.items()
+            if k not in {"id", "name", "yolo_imgsz", "redundant_bbox_filter"}
+        }
+        if "redundant_bbox_filter" in entry:
+            _apply_redundant_bbox_filter_overrides(
+                det_cfg,
+                {"border_based": entry["redundant_bbox_filter"].get("border_based", {})},
+            )
+    elif det_cfg.PROJECTION.PRESET:
         proj_cfg = get_preset(det_cfg.PROJECTION.PRESET)
         if proj_cfg is None:
             raise ValueError(f"Unknown projection preset: {det_cfg.PROJECTION.PRESET}")
@@ -538,6 +559,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", default="detection_pipeline/videos/Meeting1.mp4")
     parser.add_argument("--output-dir", default="tracker_pipeline/results")
 
+    parser.add_argument("--composite-config-id", default=None,
+                        help="Projection config id from configs/composite_configs.py, e.g. wide#3-y0.25-640")
     parser.add_argument("--preset", default="yolo_grid")
     parser.add_argument("--proj-nbr", type=int, default=6)
     parser.add_argument("--fov-h", type=float, default=60.0)
