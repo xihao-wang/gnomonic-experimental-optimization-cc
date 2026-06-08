@@ -479,6 +479,50 @@ warehouse & 19.165 & 12.688 & 29.066 & 22.373 & 3.633 & 2 & 472 & 3584 \\
 \begin{table}[H]
 \centering
 \resizebox{\textwidth}{!}{
+\begin{tabular}{l l r r r r r r r r}
+\toprule
+\textbf{Sequence} & \textbf{Configuration} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
+\midrule
+convenience\_store & dedup baseline & 45.253 & 46.339 & 44.397 & 58.631 & 38.763 & 17 & 1532 & 2470 \\
+convenience\_store & modèle appris default & \textbf{50.925} & \textbf{46.699} & \textbf{55.965} & \textbf{67.278} & 39.144 & \textbf{0} & 1537 & \textbf{2457} \\
+convenience\_store & modèle appris Optuna & 50.866 & 46.624 & 55.914 & 67.269 & \textbf{39.296} & \textbf{0} & \textbf{1515} & 2469 \\
+\midrule
+empty\_store & dedup baseline & \textbf{30.606} & \textbf{41.054} & \textbf{22.859} & \textbf{25.557} & \textbf{-9.497} & \textbf{1} & 174 & \textbf{217} \\
+empty\_store & modèle appris default & \textbf{30.606} & \textbf{41.054} & \textbf{22.859} & \textbf{25.557} & \textbf{-9.497} & \textbf{1} & 174 & \textbf{217} \\
+empty\_store & modèle appris Optuna & 30.206 & 40.485 & 22.580 & 25.112 & \textbf{-9.497} & \textbf{1} & \textbf{172} & 219 \\
+\midrule
+exhibition & dedup baseline & 38.607 & \textbf{34.763} & 45.784 & 45.802 & \textbf{1.812} & 16 & \textbf{5613} & 4181 \\
+exhibition & modèle appris default & 42.512 & 34.558 & 54.877 & 51.125 & 0.170 & \textbf{9} & 5814 & \textbf{4151} \\
+exhibition & modèle appris Optuna & \textbf{43.022} & 34.589 & \textbf{56.216} & \textbf{52.196} & 0.681 & \textbf{9} & 5737 & 4177 \\
+\midrule
+it\_office & dedup baseline & 40.873 & 31.921 & 53.017 & 39.353 & 15.162 & 8 & 1216 & 3946 \\
+it\_office & modèle appris default & \textbf{44.279} & \textbf{32.003} & \textbf{63.016} & 42.966 & \textbf{15.277} & 5 & 1219 & \textbf{3939} \\
+it\_office & modèle appris Optuna & 44.073 & 31.697 & 62.989 & \textbf{42.969} & 15.130 & \textbf{2} & \textbf{1206} & 3964 \\
+\midrule
+large\_office & dedup baseline & 35.535 & 25.638 & 50.937 & 38.137 & \textbf{24.656} & 3 & \textbf{203} & \textbf{1493} \\
+large\_office & modèle appris default & \textbf{35.934} & \textbf{25.868} & 51.676 & \textbf{39.865} & 23.326 & \textbf{2} & 234 & \textbf{1493} \\
+large\_office & modèle appris Optuna & 35.880 & 25.607 & \textbf{51.941} & 39.654 & 23.193 & \textbf{2} & 229 & 1501 \\
+\midrule
+large\_office\_2 & dedup baseline & 48.930 & 44.393 & 56.327 & 57.002 & 33.067 & 3 & \textbf{493} & 842 \\
+large\_office\_2 & modèle appris default & 49.847 & \textbf{44.710} & 57.854 & 57.166 & 34.217 & 1 & \textbf{493} & \textbf{821} \\
+large\_office\_2 & modèle appris Optuna & \textbf{51.764} & 44.679 & \textbf{61.751} & \textbf{64.013} & \textbf{34.417} & \textbf{0} & 478 & 833 \\
+\midrule
+warehouse & dedup baseline & \textbf{19.445} & 12.770 & \textbf{29.715} & \textbf{22.719} & 3.277 & 5 & 486 & 3582 \\
+warehouse & modèle appris default & 17.527 & \textbf{12.952} & 24.248 & 22.073 & 3.182 & 4 & 503 & \textbf{3570} \\
+warehouse & modèle appris Optuna & 19.165 & 12.688 & 29.066 & 22.373 & \textbf{3.633} & \textbf{2} & \textbf{472} & 3584 \\
+\midrule
+\textbf{COMBINED} & dedup baseline & 39.346 & 33.868 & 47.188 & 45.355 & \textbf{15.792} & 53 & \textbf{9717} & 16731 \\
+\textbf{COMBINED} & modèle appris default & 42.723 & \textbf{33.926} & 55.614 & 49.929 & 15.338 & 22 & 9974 & \textbf{16648} \\
+\textbf{COMBINED} & modèle appris Optuna & \textbf{43.095} & 33.816 & \textbf{56.663} & \textbf{50.811} & 15.567 & \textbf{16} & 9809 & 16747 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Comparaison par séquence entre baseline dedup, modèle appris default et modèle appris optimisé par Optuna.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{
 \begin{tabular}{l r r r r r r r r}
 \toprule
 \textbf{Configuration} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
