@@ -161,6 +161,7 @@ def build_tracker_detections(
     require_features: bool = False,
     crop_pad: int = 0,
     reid_source: str = "fisheye",
+    fallback_reid_image: Optional[np.ndarray] = None,
 ) -> List[GnomonicTrackerDetection]:
     """Convert source-aware fisheye bboxes into tracker-ready detections.
 
@@ -176,6 +177,9 @@ def build_tracker_detections(
         crop_pad: Pixel padding applied only for validating/cropping ReID boxes.
         reid_source: ``"fisheye"`` to crop the final NMS fisheye bbox, or
             ``"composite"`` to crop the selected source-aware perspective bbox.
+        fallback_reid_image: Optional fisheye image used when ``reid_source`` is
+            ``"composite"`` but the selected source-aware crop is unavailable or
+            invalid for a detection.
 
     Returns:
         List of ``GnomonicTrackerDetection`` objects.
@@ -189,40 +193,80 @@ def build_tracker_detections(
 
     tracking_tlwhs: List[np.ndarray] = []
     reid_boxes: List[Optional[np.ndarray]] = []
-    valid_reid_boxes: List[np.ndarray] = []
+    reid_sources: List[str] = []
+    primary_indices: List[int] = []
+    primary_boxes: List[np.ndarray] = []
+    fallback_indices: List[int] = []
+    fallback_boxes: List[np.ndarray] = []
 
-    for bbox in boxes:
+    for idx, bbox in enumerate(boxes):
         tracking_tlwh = _tracking_tlwh_from_bbox(bbox)
         tracking_tlwhs.append(tracking_tlwh)
+        tracking_xyxy = tlwh_to_xyxy(tracking_tlwh)
         if reid_source == "fisheye":
-            reid_box = tlwh_to_xyxy(tracking_tlwh)
+            reid_box = tracking_xyxy
         else:
             reid_box = _reid_source_xyxy_from_bbox(bbox)
         if reid_box is not None:
             reid_box = clip_xyxy_to_image(reid_box, reid_image.shape)
+
+        crop_source = reid_source
+        if reid_box is None and reid_source == "composite" and fallback_reid_image is not None:
+            reid_box = clip_xyxy_to_image(tracking_xyxy, fallback_reid_image.shape)
+            crop_source = "fisheye_fallback"
+
         reid_boxes.append(reid_box)
-        valid_reid_boxes.append(reid_box if reid_box is not None else np.zeros(4, dtype=np.float32))
+        reid_sources.append(crop_source if reid_box is not None else "invalid")
+        if reid_box is not None:
+            if crop_source == "fisheye_fallback":
+                fallback_indices.append(idx)
+                fallback_boxes.append(reid_box)
+            else:
+                primary_indices.append(idx)
+                primary_boxes.append(reid_box)
 
         # Touch the crop path here so invalid source boxes fail early in debug.
         if reid_box is not None and crop_pad:
-            crop_xyxy(reid_image, reid_box, pad=crop_pad)
+            image_for_crop = fallback_reid_image if crop_source == "fisheye_fallback" else reid_image
+            crop_xyxy(image_for_crop, reid_box, pad=crop_pad)
 
     if feature_extractor is None:
         if require_features:
             raise ValueError("feature_extractor is required when require_features=True")
         features = np.zeros((len(boxes), int(feature_dim)), dtype=np.float32)
     else:
-        features = np.asarray(feature_extractor(reid_image, valid_reid_boxes), dtype=np.float32)
-        if features.ndim != 2 or features.shape[0] != len(boxes):
-            raise ValueError(
-                "feature_extractor must return an N x D matrix matching the number of detections; "
-                f"got shape {features.shape}, expected N={len(boxes)}"
-            )
+        features: Optional[np.ndarray] = None
+
+        def fill_features(image: np.ndarray, indices: List[int], crop_boxes: List[np.ndarray]) -> None:
+            nonlocal features
+            if not indices:
+                return
+            extracted = np.asarray(feature_extractor(image, crop_boxes), dtype=np.float32)
+            if extracted.ndim != 2 or extracted.shape[0] != len(indices):
+                raise ValueError(
+                    "feature_extractor must return an N x D matrix matching the number of valid crops; "
+                    f"got shape {extracted.shape}, expected N={len(indices)}"
+                )
+            if features is None:
+                features = np.zeros((len(boxes), extracted.shape[1]), dtype=np.float32)
+            elif features.shape[1] != extracted.shape[1]:
+                raise ValueError(
+                    f"Inconsistent feature dimensions: got {extracted.shape[1]}, expected {features.shape[1]}"
+                )
+            features[indices] = extracted
+
+        fill_features(reid_image, primary_indices, primary_boxes)
+        if fallback_reid_image is not None:
+            fill_features(fallback_reid_image, fallback_indices, fallback_boxes)
+        if features is None:
+            if require_features:
+                raise ValueError("No valid ReID crops were produced from the provided boxes")
+            features = np.zeros((len(boxes), int(feature_dim)), dtype=np.float32)
 
     detections: List[GnomonicTrackerDetection] = []
     for idx, bbox in enumerate(boxes):
         metadata = _metadata_from_bbox(bbox)
-        metadata["reid_crop_source"] = reid_source
+        metadata["reid_crop_source"] = reid_sources[idx]
         metadata["reid_crop_bbox_xyxy"] = None if reid_boxes[idx] is None else reid_boxes[idx].tolist()
         detections.append(
             GnomonicTrackerDetection(

@@ -457,6 +457,7 @@ def run(args: argparse.Namespace) -> Path:
             require_features=True,
             crop_pad=args.reid_crop_pad,
             reid_source=args.reid_crop_source,
+            fallback_reid_image=frame if args.reid_crop_source == "composite" else None,
         )
         detections = _make_strongsort_detections(adapter_dets)
         _write_detections_mot_txt(detections_mot_txt, frame_idx, fisheye_bboxes)

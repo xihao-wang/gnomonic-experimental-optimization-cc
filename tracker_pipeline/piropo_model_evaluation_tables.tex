@@ -375,4 +375,136 @@ warehouse & modèle appris + AFLink & 17.111 & \textbf{12.952} & 23.168 & 22.073
 
 AFLink améliore surtout la continuité d'identité : sur le score combiné, IDSW passe de 22 à 19 et IDF1 de 49.929 à 50.583 par rapport au modèle appris seul. Le gain global reste modéré, mais il montre que le post-traitement de tracklets peut compléter le modèle temporel sans modifier les détections.
 
+\section{Comparaison crop ReID fisheye contre perspectif}
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l l l r r r r r r r r}
+\toprule
+\textbf{Sequence} & \textbf{Configuration} & \textbf{Crop ReID} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
+\midrule
+convenience\_store & modèle appris & fisheye & \textbf{50.925} & \textbf{46.699} & \textbf{55.965} & \textbf{67.278} & 39.144 & \textbf{0} & 1537 & 2457 \\
+convenience\_store & modèle appris & perspectif & 49.950 & 46.685 & 53.877 & 65.044 & \textbf{39.281} & 1 & \textbf{1531} & \textbf{2453} \\
+convenience\_store & modèle appris + AFLink & fisheye & \textbf{50.925} & \textbf{46.699} & \textbf{55.965} & \textbf{67.278} & 39.144 & \textbf{0} & 1537 & 2457 \\
+convenience\_store & modèle appris + AFLink & perspectif & 49.950 & 46.684 & 53.877 & 65.044 & \textbf{39.281} & 1 & \textbf{1531} & \textbf{2453} \\
+\midrule
+empty\_store & modèle appris & fisheye & 30.606 & \textbf{41.054} & 22.859 & 25.557 & -9.497 & 1 & \textbf{174} & \textbf{217} \\
+empty\_store & modèle appris & perspectif & 30.606 & \textbf{41.054} & 22.859 & 25.557 & -9.497 & 1 & \textbf{174} & \textbf{217} \\
+empty\_store & modèle appris + AFLink & fisheye & \textbf{41.054} & \textbf{41.054} & \textbf{41.054} & \textbf{41.902} & \textbf{-9.218} & \textbf{0} & \textbf{174} & \textbf{217} \\
+empty\_store & modèle appris + AFLink & perspectif & \textbf{41.054} & \textbf{41.054} & \textbf{41.054} & \textbf{41.902} & \textbf{-9.218} & \textbf{0} & \textbf{174} & \textbf{217} \\
+\midrule
+exhibition & modèle appris & fisheye & \textbf{42.512} & \textbf{34.558} & \textbf{54.877} & \textbf{51.125} & \textbf{0.170} & \textbf{9} & \textbf{5814} & 4151 \\
+exhibition & modèle appris & perspectif & 39.689 & 34.207 & 49.066 & 48.206 & -0.040 & 23 & 5834 & \textbf{4138} \\
+exhibition & modèle appris + AFLink & fisheye & 42.508 & 34.557 & 54.864 & \textbf{51.125} & \textbf{0.170} & \textbf{9} & \textbf{5814} & 4151 \\
+exhibition & modèle appris + AFLink & perspectif & 39.688 & 34.207 & 49.060 & 48.206 & -0.040 & 23 & 5834 & \textbf{4138} \\
+\midrule
+it\_office & modèle appris & fisheye & 44.279 & \textbf{32.003} & 63.016 & 42.966 & \textbf{15.277} & 5 & \textbf{1219} & \textbf{3939} \\
+it\_office & modèle appris & perspectif & 44.944 & 31.937 & 65.337 & \textbf{44.559} & 15.245 & 5 & \textbf{1219} & 3941 \\
+it\_office & modèle appris + AFLink & fisheye & 44.286 & \textbf{32.004} & 63.031 & 42.966 & 15.294 & \textbf{4} & \textbf{1219} & \textbf{3939} \\
+it\_office & modèle appris + AFLink & perspectif & \textbf{44.949} & 31.936 & \textbf{65.354} & \textbf{44.559} & 15.261 & \textbf{4} & \textbf{1219} & 3941 \\
+\midrule
+large\_office & modèle appris & fisheye & \textbf{35.934} & 25.868 & \textbf{51.676} & \textbf{39.865} & \textbf{23.326} & \textbf{2} & \textbf{234} & 1493 \\
+large\_office & modèle appris & perspectif & 35.742 & \textbf{25.944} & 51.043 & 39.460 & 23.193 & 3 & 239 & \textbf{1490} \\
+large\_office & modèle appris + AFLink & fisheye & \textbf{35.934} & 25.868 & \textbf{51.676} & \textbf{39.865} & \textbf{23.326} & \textbf{2} & \textbf{234} & 1493 \\
+large\_office & modèle appris + AFLink & perspectif & 35.742 & \textbf{25.944} & 51.043 & 39.460 & 23.193 & 3 & 239 & \textbf{1490} \\
+\midrule
+large\_office\_2 & modèle appris & fisheye & 49.847 & \textbf{44.710} & 57.854 & 57.166 & 34.217 & 1 & \textbf{493} & \textbf{821} \\
+large\_office\_2 & modèle appris & perspectif & 49.847 & \textbf{44.710} & 57.854 & 57.166 & 34.217 & 1 & \textbf{493} & \textbf{821} \\
+large\_office\_2 & modèle appris + AFLink & fisheye & \textbf{51.915} & 44.708 & \textbf{62.140} & \textbf{64.196} & \textbf{34.267} & \textbf{0} & \textbf{493} & \textbf{821} \\
+large\_office\_2 & modèle appris + AFLink & perspectif & \textbf{51.915} & 44.708 & \textbf{62.140} & \textbf{64.196} & \textbf{34.267} & \textbf{0} & \textbf{493} & \textbf{821} \\
+\midrule
+warehouse & modèle appris & fisheye & 17.527 & 12.952 & 24.248 & 22.073 & 3.182 & \textbf{4} & 503 & \textbf{3570} \\
+warehouse & modèle appris & perspectif & \textbf{17.534} & \textbf{12.958} & \textbf{24.255} & \textbf{22.081} & \textbf{3.230} & \textbf{4} & \textbf{501} & \textbf{3570} \\
+warehouse & modèle appris + AFLink & fisheye & 17.111 & 12.952 & 23.168 & 22.073 & 3.182 & \textbf{4} & 503 & \textbf{3570} \\
+warehouse & modèle appris + AFLink & perspectif & 17.117 & \textbf{12.958} & 23.175 & \textbf{22.081} & \textbf{3.230} & \textbf{4} & \textbf{501} & \textbf{3570} \\
+\midrule
+\textbf{COMBINED} & modèle appris & fisheye & 42.723 & \textbf{33.926} & 55.614 & 49.929 & \textbf{15.338} & 22 & \textbf{9974} & 16648 \\
+\textbf{COMBINED} & modèle appris & perspectif & 41.544 & 33.786 & 53.144 & 48.566 & 15.290 & 38 & 9991 & \textbf{16630} \\
+\textbf{COMBINED} & modèle appris + AFLink & fisheye & \textbf{42.947} & \textbf{33.926} & \textbf{56.137} & \textbf{50.583} & 15.347 & \textbf{19} & \textbf{9974} & 16648 \\
+\textbf{COMBINED} & modèle appris + AFLink & perspectif & 41.776 & 33.785 & 53.671 & 49.219 & 15.300 & 35 & 9991 & \textbf{16630} \\
+\bottomrule
+\end{tabular}
+}
+\caption{Comparaison standard GT entre crop ReID fisheye et crop ReID perspectif pour le modèle appris, avec et sans AFLink.}
+\end{table}
+
+\section{Optimisation Optuna du modèle appris}
+
+Une recherche Optuna a ensuite été réalisée sur les hyperparamètres du tracker en gardant le même checkpoint temporel appris, sans veto et sans AFLink. L'objectif optimisé est un score équilibré qui récompense IDF1 et AssA, tout en récompensant aussi la baisse de IDSW par rapport au modèle appris par défaut. La meilleure configuration trouvée est la suivante.
+
+\begin{table}[H]
+\centering
+\resizebox{0.82\textwidth}{!}{
+\begin{tabular}{l r}
+\toprule
+\textbf{Paramètre} & \textbf{Valeur optimale} \\
+\midrule
+\texttt{learned\_temporal\_alpha} & 0.647868 \\
+\texttt{learned\_temporal\_min\_scale} & 0.009455 \\
+\texttt{learned\_temporal\_max\_correction} & 0.018949 \\
+\texttt{matching\_threshold} & 0.323836 \\
+\texttt{max\_iou\_distance} & 0.654400 \\
+\texttt{max\_age} & 136 \\
+\texttt{n\_init} & 5 \\
+\texttt{learned\_temporal\_veto\_cost} & -1.0 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Meilleurs hyperparamètres trouvés par Optuna pour le modèle appris sans veto.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l r r r r r r r r}
+\toprule
+\textbf{Sequence} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
+\midrule
+convenience\_store & 50.866 & 46.624 & 55.914 & 67.269 & 39.296 & 0 & 1515 & 2469 \\
+empty\_store & 30.206 & 40.485 & 22.580 & 25.112 & -9.497 & 1 & 172 & 219 \\
+exhibition & 43.022 & 34.589 & 56.216 & 52.196 & 0.681 & 9 & 5737 & 4177 \\
+it\_office & 44.073 & 31.697 & 62.989 & 42.969 & 15.130 & 2 & 1206 & 3964 \\
+large\_office & 35.880 & 25.607 & 51.941 & 39.654 & 23.193 & 2 & 229 & 1501 \\
+large\_office\_2 & 51.764 & 44.679 & 61.751 & 64.013 & 34.417 & 0 & 478 & 833 \\
+warehouse & 19.165 & 12.688 & 29.066 & 22.373 & 3.633 & 2 & 472 & 3584 \\
+\midrule
+\textbf{COMBINED} & \textbf{43.095} & 33.816 & \textbf{56.663} & \textbf{50.811} & 15.567 & \textbf{16} & 9809 & 16747 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Évaluation standard GT du modèle appris après optimisation Optuna.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l r r r r r r r r}
+\toprule
+\textbf{Configuration} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
+\midrule
+dedup baseline & 39.346 & 33.868 & 47.188 & 45.355 & \textbf{15.792} & 53 & \textbf{9717} & 16731 \\
+modèle appris default & 42.723 & \textbf{33.926} & 55.614 & 49.929 & 15.338 & 22 & 9974 & \textbf{16648} \\
+modèle appris Optuna & \textbf{43.095} & 33.816 & \textbf{56.663} & \textbf{50.811} & 15.567 & \textbf{16} & 9809 & 16747 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Comparaison COMBINED entre baseline dedup, modèle appris default et modèle appris optimisé par Optuna.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\resizebox{0.9\textwidth}{!}{
+\begin{tabular}{l r r r r r r r r}
+\toprule
+\textbf{Comparaison} & \textbf{HOTA} & \textbf{DetA} & \textbf{AssA} & \textbf{IDF1} & \textbf{MOTA} & \textbf{IDSW} & \textbf{FP} & \textbf{FN} \\
+\midrule
+Optuna - baseline & +3.749 & -0.052 & +9.475 & +5.456 & -0.225 & -37 & +92 & +16 \\
+Optuna - default & +0.372 & -0.110 & +1.049 & +0.882 & +0.229 & -6 & -165 & +99 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Deltas COMBINED du modèle appris optimisé par Optuna. Pour IDSW, une valeur négative indique moins de changements d'identité.}
+\end{table}
+
 \end{document}

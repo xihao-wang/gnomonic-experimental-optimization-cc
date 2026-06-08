@@ -87,6 +87,7 @@ temp-copy.py
 tracker_pipeline/tmp_trackeval*/
 tracker_pipeline/trackeval_runs/
 tracker_pipeline/optuna_runs/
+tracker_pipeline/cache/
 
 # Image-composer outputs (can be regenerated)
 image-composer/multi-persp-out/
