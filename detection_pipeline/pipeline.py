@@ -47,12 +47,60 @@ from detection_pipeline.redundant_bbox_filter import (
 )
 
 
+def _apply_redundant_bbox_filter_overrides(dp_cfg, overrides):
+    """
+    Override REDUNDANT_BBOX_FILTER.BORDER_BASED leaves from an external config.
+
+    This lets evaluation/tracking code select an improved dedup configuration
+    without changing the default detection_pipeline config globally.
+    """
+    def _get(node, key, default=None):
+        if hasattr(node, key):
+            return getattr(node, key)
+        if isinstance(node, dict):
+            return node.get(key, default)
+        return default
+
+    bb = _get(overrides, "BORDER_BASED")
+    if bb is None:
+        return
+
+    target = dp_cfg.REDUNDANT_BBOX_FILTER.BORDER_BASED
+
+    flagging = _get(bb, "FLAGGING")
+    if flagging is not None:
+        if _get(flagging, "ENABLED") is not None:
+            target.FLAGGING.ENABLED = bool(_get(flagging, "ENABLED"))
+        if _get(flagging, "PRESET") is not None:
+            target.FLAGGING.PRESET = str(_get(flagging, "PRESET"))
+        if _get(flagging, "OVERRIDES") is not None:
+            target.FLAGGING.OVERRIDES = [list(e) for e in _get(flagging, "OVERRIDES")]
+        if _get(flagging, "TOLERANCE_PX") is not None:
+            target.FLAGGING.TOLERANCE_PX = float(_get(flagging, "TOLERANCE_PX"))
+        if _get(flagging, "MIN_SIDE_Y_FRACTION_IN_TILE") is not None:
+            target.FLAGGING.MIN_SIDE_Y_FRACTION_IN_TILE = float(
+                _get(flagging, "MIN_SIDE_Y_FRACTION_IN_TILE")
+            )
+
+    confirmation = _get(bb, "CONFIRMATION")
+    if confirmation is not None:
+        if _get(confirmation, "ENABLED") is not None:
+            target.CONFIRMATION.ENABLED = bool(_get(confirmation, "ENABLED"))
+        if _get(confirmation, "MIN_AREA_RATIO_TO_LARGER") is not None:
+            target.CONFIRMATION.MIN_AREA_RATIO_TO_LARGER = float(
+                _get(confirmation, "MIN_AREA_RATIO_TO_LARGER")
+            )
+        if _get(confirmation, "MIN_OVERLAP_IOS") is not None:
+            target.CONFIRMATION.MIN_OVERLAP_IOS = float(_get(confirmation, "MIN_OVERLAP_IOS"))
+
+
 class DetectionPipeline:
     """
     Orchestrates the detection pipeline: fisheye -> composite -> YOLO detection.
     """
 
-    def __init__(self, cfg=None, model_path=None, conf_threshold=None, imgsz=None):
+    def __init__(self, cfg=None, model_path=None, conf_threshold=None, imgsz=None,
+                 redundant_bbox_filter_cfg=None):
         """
         Initialize detection pipeline.
 
@@ -61,6 +109,8 @@ class DetectionPipeline:
             model_path: Optional path to YOLO model (overrides cfg if provided)
             conf_threshold: Optional confidence threshold (overrides cfg if provided)
             imgsz: Optional YOLO inference resolution (overrides YOLODetector default if provided)
+            redundant_bbox_filter_cfg: Optional config node/dict overriding
+                REDUNDANT_BBOX_FILTER.BORDER_BASED entries.
         """
         if cfg is None:
             cfg = get_cfg()
@@ -73,6 +123,8 @@ class DetectionPipeline:
             self.cfg.YOLO.MODEL = model_path
         if conf_threshold is not None:
             self.cfg.YOLO.CONFIDENCE_THRESHOLD = conf_threshold
+        if redundant_bbox_filter_cfg is not None:
+            _apply_redundant_bbox_filter_overrides(self.cfg, redundant_bbox_filter_cfg)
 
         self.detector = None
         self._init_detector()
@@ -278,6 +330,7 @@ class DetectionPipeline:
                 grid=grid_tuple,
                 active_borders=active_borders,
                 tolerance_px=rb_flag_cfg.TOLERANCE_PX,
+                min_side_y_fraction_in_tile=rb_flag_cfg.MIN_SIDE_Y_FRACTION_IN_TILE,
             )
             flagged_count = sum(1 for d in detections if "_flagged_border_side" in d)
             if self.cfg.VERBOSE and not metrics_mode:

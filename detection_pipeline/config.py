@@ -54,10 +54,10 @@ _C.PROJECTION.PROJ_NBR = 6
 
 # Field of view in degrees
 _C.PROJECTION.FOV_H = 75.0  # Horizontal
-_C.PROJECTION.FOV_V = 85.0  # Vertical
+_C.PROJECTION.FOV_V = 90.0  # Vertical
 
 # Camera positioning
-_C.PROJECTION.LATITUDE = 40.0  # 0=nadir (straight down), 90=horizon
+_C.PROJECTION.LATITUDE = 38.0  # 0=nadir (straight down), 90=horizon
 _C.PROJECTION.LON_0 = 0.0
 _C.PROJECTION.LON_STEP = 60.0  # 360 / PROJ_NBR for uniform spacing
 
@@ -173,6 +173,12 @@ _C.REDUNDANT_BBOX_FILTER.BORDER_BASED.FLAGGING.OVERRIDES = []
 # permissive tolerance — so leaning permissive here and relying on Stage 2
 # is usually safe. When Stage 2 is disabled, lean conservative (small value).
 _C.REDUNDANT_BBOX_FILTER.BORDER_BASED.FLAGGING.TOLERANCE_PX = 1.2
+
+# Spatial gate restricting where a side may fire, expressed as the flagged
+# side's vertical position inside the tile (0.0 = tile top, 1.0 = tile bottom).
+# The flag fires only when the flagged side's Y fraction is >= this value.
+# Use 0.5 to restrict dedup flagging to the lower half of a projection tile.
+_C.REDUNDANT_BBOX_FILTER.BORDER_BASED.FLAGGING.MIN_SIDE_Y_FRACTION_IN_TILE = 0.0
 
 # ---- Stage 2: fisheye-side containment confirmation (after Stage-2 Soft-NMS) ----
 _C.REDUNDANT_BBOX_FILTER.BORDER_BASED.CONFIRMATION = CN()

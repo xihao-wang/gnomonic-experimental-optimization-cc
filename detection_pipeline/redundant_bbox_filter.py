@@ -124,6 +124,7 @@ def flag_border_aligned_candidates(
     grid: Tuple[int, int],
     active_borders: Dict[Tuple[int, int], Dict[str, bool]],
     tolerance_px: float,
+    min_side_y_fraction_in_tile: float = 0.0,
 ) -> List[Dict]:
     """
     Tag detections whose bbox has any side flush against an active tile border.
@@ -133,6 +134,11 @@ def flag_border_aligned_candidates(
         '_flagged_tile':        (row, col) of the source tile
 
     Unflagged detections are returned unchanged. Nothing is dropped here.
+
+    Args:
+        min_side_y_fraction_in_tile: Spatial gate on where a border flag may
+            fire, expressed as the side midpoint's vertical fraction inside the
+            tile. 0.0 disables the restriction; 0.5 keeps only lower-half flags.
     """
     if not detections:
         return []
@@ -161,14 +167,28 @@ def flag_border_aligned_candidates(
         tile_bottom = (row + 1) * cell_h
 
         sides_active = active_borders[(row, col)]
+
+        def _y_frac(y_px):
+            return (y_px - tile_top) / cell_h if cell_h > 0 else 0.0
+
+        side_y_fraction = {
+            "top": _y_frac(top_px),
+            "bottom": _y_frac(bottom_px),
+            "left": _y_frac(cy_px),
+            "right": _y_frac(cy_px),
+        }
+
+        def _allowed(side):
+            return side_y_fraction[side] >= min_side_y_fraction_in_tile
+
         flagged_side = None
-        if sides_active["top"]    and abs(top_px    - tile_top)    <= tolerance_px:
+        if sides_active["top"] and abs(top_px - tile_top) <= tolerance_px and _allowed("top"):
             flagged_side = "top"
-        elif sides_active["bottom"] and abs(bottom_px - tile_bottom) <= tolerance_px:
+        elif sides_active["bottom"] and abs(bottom_px - tile_bottom) <= tolerance_px and _allowed("bottom"):
             flagged_side = "bottom"
-        elif sides_active["left"]   and abs(left_px   - tile_left)   <= tolerance_px:
+        elif sides_active["left"] and abs(left_px - tile_left) <= tolerance_px and _allowed("left"):
             flagged_side = "left"
-        elif sides_active["right"]  and abs(right_px  - tile_right)  <= tolerance_px:
+        elif sides_active["right"] and abs(right_px - tile_right) <= tolerance_px and _allowed("right"):
             flagged_side = "right"
 
         if flagged_side is None:
